@@ -103,6 +103,115 @@ class DateTimeHelperRenderingSpec extends Specification implements JsonViewUnitT
         parse(result.jsonText) == parse(jackson.writeValueAsString(pogo.properties.findAll { it.key != 'class' }))
     }
 
+    void "g.render of a POGO writes a Date in a collection or array of DTOs the same way as its direct property"() {
+        given:
+        def date = Date.from(instant)
+        def holder = new CollectionDateHolder(
+                direct: date,
+                item: new DatedItem(date: date),
+                items: [new DatedItem(date: date)],
+                array: [new DatedItem(date: date)] as DatedItem[],
+                rawItems: [new DatedItem(date: date)],
+                dates: [date] as Date[])
+
+        when:
+        def result = render('''
+            model {
+                Object object
+            }
+            json g.render(object)
+        ''', [object: holder])
+
+        then: 'every Date in the object graph uses the generator of the view, not the default generator of Groovy'
+        result.json.direct == '2025-10-08T07:48:46.407Z'
+        result.json.item.date == result.json.direct
+        result.json.items*.date == [result.json.direct]
+        result.json.array*.date == [result.json.direct]
+        result.json.rawItems*.date == [result.json.direct]
+        result.json.dates == [result.json.direct]
+    }
+
+    void "g.render of a root list of DTOs writes Dates with the configured generator"() {
+        given:
+        def date = Date.from(instant)
+
+        when:
+        def result = render('''
+            model {
+                Object object
+            }
+            json g.render(object)
+        ''', [object: [new DatedItem(date: date)]])
+
+        then:
+        result.jsonText == '[{"date":"2025-10-08T07:48:46.407Z"}]'
+    }
+
+    void "a configured dateFormat applies to a Date in a collection of DTOs of g.render"() {
+        given: 'an engine configured with a date format'
+        def date = Date.from(instant)
+        def engine = new JsonViewTemplateEngine(
+                new JsonViewConfiguration(generator: new JsonViewGeneratorConfiguration(dateFormat: 'yyyy-MM-dd HH:mm', timeZone: 'UTC')),
+                DateTimeHelperRenderingSpec.classLoader)
+        engine.mappingContext = mappingContext
+        def template = engine.createTemplate('''
+            model {
+                Object object
+            }
+            json g.render(object)
+        ''')
+        def out = new StringWriter()
+
+        when:
+        template.make(object: new CollectionDateHolder(items: [new DatedItem(date: date)])).writeTo(out)
+
+        then: 'the pattern of the configured generator writes the Date inside the DTO collection too'
+        out.toString() == '{"items":[{"date":"2025-10-08 07:48"}]}'
+    }
+
+    void "g.inline writes a Date property with the configured generator"() {
+        given:
+        def date = Date.from(instant)
+
+        when:
+        def result = render('''
+            model {
+                Object object
+            }
+            json {
+                g.inline(object)
+            }
+        ''', [object: new CollectionDateHolder(direct: date)])
+
+        then:
+        result.jsonText == '{"direct":"2025-10-08T07:48:46.407Z"}'
+    }
+
+    void "a child template that renders a POGO inside a JSON block writes Dates with the configured generator"() {
+        given:
+        def date = Date.from(instant)
+
+        when:
+        def result = render(template: 'childDatesPogo', model: [object: new CollectionDateHolder(direct: date)])
+
+        then:
+        result.jsonText == '{"foo":"bar","direct":"2025-10-08T07:48:46.407Z"}'
+    }
+
+    void "a child template that renders a domain instance inside a JSON block writes Dates with the configured generator"() {
+        given:
+        mappingContext.addPersistentEntity(MonthEntity)
+        def date = Date.from(instant)
+
+        when:
+        def result = render(template: 'childDatesEntity', model: [object: new MonthEntity(name: 'Fred', created: date)])
+
+        then:
+        result.json.foo == 'bar'
+        result.json.name == 'Fred'
+        result.json.created == '2025-10-08T07:48:46.407Z'
+    }
+
     void "an application's converter for its own type does not make g.render skip that type's properties or template"() {
         given: 'an engine that loads an application converter for Point, as ServiceLoader finds converters'
         def services = new File(servicesDir, 'META-INF/services/groovy.json.JsonGenerator$Converter')
@@ -255,6 +364,19 @@ class DateTimeHolder {
     List<Date> dates
 }
 
+class CollectionDateHolder {
+    Date direct
+    DatedItem item
+    List<DatedItem> items
+    DatedItem[] array
+    List<Object> rawItems
+    Date[] dates
+}
+
+class DatedItem {
+    Date date
+}
+
 class Point {
     int x
     int y
@@ -309,4 +431,5 @@ class SqlTimeAsDateJsonConverter implements JsonGenerator.Converter {
 class MonthEntity {
     String name
     Month month
+    Date created
 }

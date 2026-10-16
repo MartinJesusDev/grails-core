@@ -18,8 +18,11 @@
  */
 package grails.plugin.json.view
 
+import java.time.Instant
+
 import tools.jackson.databind.json.JsonMapper
 import grails.gorm.annotation.Entity
+import grails.plugin.json.view.halembedded.Dated
 import grails.plugin.json.view.halembedded.Person
 import grails.plugin.json.view.halembedded.Player
 import grails.plugin.json.view.halembedded.Team
@@ -272,6 +275,29 @@ class HalEmbeddedSpec extends Specification implements JsonViewTest {
                 "total": 1
             }
         ''')
+    }
+
+    void 'test hal embedded with a callable writes Dates with the configured generator'() {
+        given: 'a POGO with a Date'
+        def date = Date.from(Instant.parse('2025-10-08T07:48:46.407Z'))
+
+        when: 'hal.embedded is used with a callable that renders the Date'
+        def result = render('''
+            import grails.plugin.json.view.halembedded.Dated
+
+            @Field Dated dated
+
+            json {
+                hal.embedded {
+                    item(dated) {
+                        created dated.created
+                    }
+                }
+            }
+        ''', [dated: new Dated(created: date)])
+
+        then: 'the Date keeps the millisecond precision and the Z suffix of the view generator'
+        result.json._embedded.item.created == '2025-10-08T07:48:46.407Z'
     }
 
     void 'test hal render method for one-to-many associations'() {
