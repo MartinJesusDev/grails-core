@@ -104,7 +104,7 @@ class DefaultGrailsJsonViewHelper extends DefaultJsonViewHelper implements Grail
 
     @Override
     void inline(Object object, Map arguments = Collections.emptyMap(), @DelegatesTo(StreamingJsonBuilder.StreamingJsonDelegate) Closure customizer = null) {
-        def jsonDelegate = new StreamingJsonBuilder.StreamingJsonDelegate(view.out, true)
+        def jsonDelegate = new StreamingJsonBuilder.StreamingJsonDelegate(view.out, true, getGenerator())
         inline(object, arguments, customizer, jsonDelegate)
     }
 
@@ -201,7 +201,7 @@ class DefaultGrailsJsonViewHelper extends DefaultJsonViewHelper implements Grail
                     if (entity != null) {
 
                         if (inline) {
-                            def jsonDelegate = new StreamingJsonBuilder.StreamingJsonDelegate(out, first)
+                            def jsonDelegate = new StreamingJsonBuilder.StreamingJsonDelegate(out, first, generator)
                             if (beforeClosure != null) {
                                 beforeClosure.setDelegate(jsonDelegate)
                                 beforeClosure.call()
@@ -230,7 +230,7 @@ class DefaultGrailsJsonViewHelper extends DefaultJsonViewHelper implements Grail
 
                     } else {
                         if (inline) {
-                            StreamingJsonBuilder.StreamingJsonDelegate jsonDelegate = new StreamingJsonBuilder.StreamingJsonDelegate(out, first)
+                            StreamingJsonBuilder.StreamingJsonDelegate jsonDelegate = new StreamingJsonBuilder.StreamingJsonDelegate(out, first, generator)
                             if (beforeClosure != null) {
                                 beforeClosure.setDelegate(jsonDelegate)
                                 beforeClosure.call(object)
@@ -436,7 +436,7 @@ class DefaultGrailsJsonViewHelper extends DefaultJsonViewHelper implements Grail
                                         }
                                         else {
                                             out.append(JsonOutput.OPEN_BRACE)
-                                            processSimple(new StreamingJsonBuilder.StreamingJsonDelegate(out, true), o, processedObjects, incs, excs, "${path}${propertyName}.", renderNulls)
+                                            processSimple(new StreamingJsonBuilder.StreamingJsonDelegate(out, true, getGenerator()), o, processedObjects, incs, excs, "${path}${propertyName}.", renderNulls)
                                             out.append(JsonOutput.CLOSE_BRACE)
                                         }
                                     })

@@ -548,14 +548,14 @@ class DefaultHalViewHelper extends DefaultJsonViewHelper implements HalViewHelpe
         StreamingJsonBuilder.StreamingJsonDelegate delegate
 
         HalStreamingJsonDelegate(DefaultHalViewHelper viewHelper, StreamingJsonBuilder.StreamingJsonDelegate delegate) {
-            super(delegate.getWriter(), true)
+            super(delegate.getWriter(), true, viewHelper.getGenerator())
             this.viewHelper = viewHelper
             this.delegate = delegate
             this.contentType = viewHelper.contentType
         }
 
         HalStreamingJsonDelegate(String contentType, DefaultHalViewHelper viewHelper, StreamingJsonBuilder.StreamingJsonDelegate delegate) {
-            super(delegate.getWriter(), true)
+            super(delegate.getWriter(), true, viewHelper.getGenerator())
             this.viewHelper = viewHelper
             this.delegate = delegate
             this.contentType = contentType
@@ -646,7 +646,7 @@ class DefaultHalViewHelper extends DefaultJsonViewHelper implements HalViewHelpe
 
         protected void writeObject(value, Closure callable) {
             writer.write(JsonOutput.OPEN_BRACE)
-            StreamingJsonBuilder.StreamingJsonDelegate delegate = new StreamingJsonBuilder.StreamingJsonDelegate(writer, true)
+            StreamingJsonBuilder.StreamingJsonDelegate delegate = new StreamingJsonBuilder.StreamingJsonDelegate(writer, true, viewHelper.getGenerator())
             Closure curried = callable.curry(value)
             curried.setDelegate(delegate)
             curried.setResolveStrategy(Closure.DELEGATE_FIRST)

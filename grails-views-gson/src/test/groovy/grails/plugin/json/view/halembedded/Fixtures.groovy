@@ -60,3 +60,7 @@ class Person {
 class Address {
     String postCode
 }
+
+class Dated {
+    Date created
+}
