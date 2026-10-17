@@ -115,6 +115,123 @@ class DetachCriteriaSubquerySpec extends HibernateGormDatastoreSpec {
         result.size() == 1
     }
 
+    void "test a lazy subquery keeps its restriction when used with inList"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = Organisation.whereLazy { eq('name', 'A') }
+        List<Organisation> result = Organisation.where { inList('name', subquery) }.list()
+
+        then:
+        result*.name == ['A']
+    }
+
+    void "test a lazy subquery keeps its restriction when used with gtAll"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = Organisation.whereLazy { eq('name', 'A') }
+        List<Organisation> result = Organisation.where { gtAll('name', subquery) }.list()
+
+        then:
+        result*.name == ['B']
+    }
+
+    void "test a buildLazy subquery keeps its restriction when used with notIn"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = new DetachedCriteria<>(Organisation).buildLazy { eq('name', 'A') }
+        List<Organisation> result = Organisation.where { notIn('name', subquery) }.list()
+
+        then:
+        result*.name == ['B']
+    }
+
+    void "test a lazy detached criteria used as the root query still materializes"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        expect:
+        Organisation.whereLazy { eq('name', 'A') }.list()*.name == ['A']
+    }
+
+    void "test a lazy root query with the where query syntax"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> query = Organisation.whereLazy { name == 'A' }
+        List<Organisation> result = query.list()
+
+        then:
+        result*.name == ['A']
+    }
+
+    void "test a hoisted eager subquery keeps its restriction when used with inList"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = Organisation.where { eq('name', 'A') }
+        List<Organisation> result = Organisation.where { inList('name', subquery) }.list()
+
+        then:
+        result*.name == ['A']
+    }
+
+    void "test executing a query does not mutate the subquery criteria"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+        DetachedCriteria<Organisation> subquery = Organisation.where { eq('name', 'A') }
+
+        when:
+        Organisation.where { inList('name', subquery) }.list()
+
+        then: 'the subquery keeps its own criteria and no projection is added to it'
+        subquery.criteria.size() == 1
+        subquery.projections.isEmpty()
+    }
+
+    void "test a subquery criteria can be reused for a different property"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = Organisation.where { eq('name', 'A') }
+        Organisation.where { inList('name', subquery) }.list()
+        List<Organisation> result = Organisation.where { eq('id', subquery) }.list()
+
+        then:
+        result*.name == ['A']
+    }
+
+    void "test a criteria used as a subquery still returns entities when executed on its own"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+        DetachedCriteria<Organisation> subquery = Organisation.where { eq('name', 'A') }
+
+        when:
+        Organisation.where { gtAll('name', subquery) }.list()
+        List<Organisation> result = subquery.list()
+
+        then:
+        result.size() == 1
+        result[0] instanceof Organisation
+    }
+
     private User createUser(String email) {
         User user = new User(email: email)
         Organisation defaultOrg = Organisation.findOrCreateByName("default")
