@@ -644,6 +644,26 @@ public class JpaQueryBuilder {
             }
         });
 
+        queryHandlers.put(Query.Exists.class, new QueryHandler() {
+            public int handle(PersistentEntity entity, Query.Criterion criterion, StringBuilder q, StringBuilder whereClause, String logicalName, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible) {
+                Query.Exists exists = (Query.Exists) criterion;
+                whereClause.append("EXISTS (");
+                position = buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, exists.getSubquery());
+                whereClause.append(CLOSE_BRACKET);
+                return position;
+            }
+        });
+
+        queryHandlers.put(Query.NotExists.class, new QueryHandler() {
+            public int handle(PersistentEntity entity, Query.Criterion criterion, StringBuilder q, StringBuilder whereClause, String logicalName, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible) {
+                Query.NotExists notExists = (Query.NotExists) criterion;
+                whereClause.append("NOT EXISTS (");
+                position = buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, notExists.getSubquery());
+                whereClause.append(CLOSE_BRACKET);
+                return position;
+            }
+        });
+
         queryHandlers.put(Query.EqualsAll.class, new QueryHandler() {
             public int handle(PersistentEntity entity, Query.Criterion criterion, StringBuilder q, StringBuilder whereClause, String logicalName, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible) {
                 Query.EqualsAll equalsAll = (Query.EqualsAll) criterion;
