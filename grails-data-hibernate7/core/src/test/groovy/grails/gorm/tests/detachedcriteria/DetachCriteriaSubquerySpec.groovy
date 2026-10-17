@@ -232,6 +232,35 @@ class DetachCriteriaSubquerySpec extends HibernateGormDatastoreSpec {
         result[0] instanceof Organisation
     }
 
+    void "test a not-equals subquery keeps its restriction and is not mutated"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = Organisation.where { eq('name', 'A') }
+        List<Organisation> result = Organisation.where { ne('name', subquery) }.list()
+
+        then: 'ne excludes the subquery value, and null values are kept'
+        result*.name == ['B']
+
+        and: 'the subquery is not mutated'
+        subquery.projections.isEmpty()
+    }
+
+    void "test a not-equals subquery materializes a lazy criteria"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> subquery = Organisation.whereLazy { eq('name', 'A') }
+        List<Organisation> result = Organisation.where { ne('name', subquery) }.list()
+
+        then: 'the lazy subquery keeps its restriction'
+        result*.name == ['B']
+    }
+
     private User createUser(String email) {
         User user = new User(email: email)
         Organisation defaultOrg = Organisation.findOrCreateByName("default")
