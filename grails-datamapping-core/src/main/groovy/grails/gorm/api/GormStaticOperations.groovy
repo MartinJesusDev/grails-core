@@ -57,21 +57,21 @@ interface GormStaticOperations<D> {
      * @param callable Callable closure containing detached criteria definition
      * @return The DetachedCriteria instance
      */
-    DetachedCriteria<D> where(Closure callable)
+    DetachedCriteria<D> where(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable)
 
     /**
      *
      * @param callable Callable closure containing detached criteria definition
      * @return The DetachedCriteria instance that is lazily initialized
      */
-    DetachedCriteria<D> whereLazy(Closure callable)
+    DetachedCriteria<D> whereLazy(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable)
 
     /**
      *
      * @param callable Callable closure containing detached criteria definition
      * @return The DetachedCriteria instance
      */
-    DetachedCriteria<D> whereAny(Closure callable)
+    DetachedCriteria<D> whereAny(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable)
 
     /**
      * Uses detached criteria to build a query and then execute it returning a list
@@ -79,7 +79,7 @@ interface GormStaticOperations<D> {
      * @param callable The callable
      * @return A List of entities
      */
-    List<D> findAll(Closure callable)
+    List<D> findAll(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable)
 
     /**
      * Uses detached criteria to build a query and then execute it returning a list
@@ -88,7 +88,7 @@ interface GormStaticOperations<D> {
      * @param callable The callable
      * @return A List of entities
      */
-    List<D> findAll(Map args, Closure callable)
+    List<D> findAll(Map args, @DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable)
 
     /**
      * Uses detached criteria to build a query and then execute it returning a list
@@ -96,7 +96,7 @@ interface GormStaticOperations<D> {
      * @param callable The callable
      * @return A single entity
      */
-    D find(Closure callable)
+    D find(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable)
 
     /**
      * Saves a list of objects in one go

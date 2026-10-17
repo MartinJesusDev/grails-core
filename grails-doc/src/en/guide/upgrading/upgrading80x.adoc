@@ -4663,6 +4663,11 @@ class BookQueries {
 }
 ----
 
+The static domain entry points `Domain.where`, `Domain.whereLazy`, `Domain.whereAny`,
+`Domain.find` and `Domain.findAll` declare the same strategy, so a criteria subquery nested
+inside `Book.where { ... }` also type-checks under `@CompileStatic`. The two effects above apply
+to a `Closure` parameter forwarded to those methods as well.
+
 ==== 81. XML-Safe HTML Escaping Is the Default
 
 When `grails.views.gsp.htmlcodec` is not set, the HTML codec, which GSP uses to escape `${}` expressions and

@@ -211,42 +211,42 @@ class TenantDelegatingGormOperations<D> implements GormAllOperations<D> {
     }
 
     @Override
-    DetachedCriteria<D> where(Closure callable) {
+    DetachedCriteria<D> where(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable) {
         Tenants.withId(requireMultiTenantCapableDatastore(), tenantId) {
             allOperations.where(callable)
         }
     }
 
     @Override
-    DetachedCriteria<D> whereLazy(Closure callable) {
+    DetachedCriteria<D> whereLazy(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable) {
         Tenants.withId(requireMultiTenantCapableDatastore(), tenantId) {
             allOperations.whereLazy(callable)
         }
     }
 
     @Override
-    DetachedCriteria<D> whereAny(Closure callable) {
+    DetachedCriteria<D> whereAny(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable) {
         Tenants.withId(requireMultiTenantCapableDatastore(), tenantId) {
             allOperations.whereAny(callable)
         }
     }
 
     @Override
-    List<D> findAll(Closure callable) {
+    List<D> findAll(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable) {
         Tenants.withId(requireMultiTenantCapableDatastore(), tenantId) {
             allOperations.findAll(callable)
         }
     }
 
     @Override
-    List<D> findAll(Map args, Closure callable) {
+    List<D> findAll(Map args, @DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable) {
         Tenants.withId(requireMultiTenantCapableDatastore(), tenantId) {
             allOperations.findAll(args, callable)
         }
     }
 
     @Override
-    D find(Closure callable) {
+    D find(@DelegatesTo(value = DetachedCriteria, strategy = Closure.DELEGATE_FIRST) Closure callable) {
         Tenants.withId(requireMultiTenantCapableDatastore(), tenantId) {
             allOperations.find(callable)
         }
