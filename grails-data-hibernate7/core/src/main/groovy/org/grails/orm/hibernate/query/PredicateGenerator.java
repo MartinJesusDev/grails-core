@@ -237,17 +237,18 @@ public class PredicateGenerator {
         // If it's a comparison criterion, we expect the subquery to return the same type as the property
         Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
 
-        // If the subquery has no projections, we default to projecting the SAME property name if available on the subquery entity
-        if (qc.getProjections().isEmpty()) {
-            PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(c.getProperty());
-            if (prop != null) {
-                ((QueryableCriteria) qc).getProjections().add(Projections.property(c.getProperty()));
-            }
-        }
-
         Query.ProjectionList projectionList = new Query.ProjectionList();
         for (Query.Projection p : qc.getProjections()) {
             projectionList.add(p);
+        }
+
+        // A subquery that projects nothing defaults to its own property with the compared name when
+        // it has one. The default is local on purpose: translating a query must not mutate the criteria.
+        if (projectionList.isEmpty()) {
+            PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(c.getProperty());
+            if (prop != null) {
+                projectionList.add(Projections.property(c.getProperty()));
+            }
         }
 
         Subquery<?> subquery = criteriaQuery.subquery(expectedType);
@@ -401,17 +402,17 @@ public class PredicateGenerator {
                 materializeLazyCriteria(qc);
                 Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
 
-                // If the subquery has no projections, we default to projecting the SAME property name if available on the subquery entity
-                if (qc.getProjections().isEmpty() && propertyPath != null) {
-                    PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(propertyName);
-                    if (prop != null) {
-                        ((QueryableCriteria) qc).getProjections().add(Projections.property(propertyName));
-                    }
-                }
-
                 Query.ProjectionList projectionList = new Query.ProjectionList();
                 for (Object p : qc.getProjections()) {
                     projectionList.add((Query.Projection) p);
+                }
+
+                // The default projection is local on purpose: translating a query must not mutate the criteria.
+                if (projectionList.isEmpty() && propertyPath != null) {
+                    PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(propertyName);
+                    if (prop != null) {
+                        projectionList.add(Projections.property(propertyName));
+                    }
                 }
 
                 Subquery<?> subquery = criteriaQuery.subquery(expectedType);
@@ -569,20 +570,25 @@ public class PredicateGenerator {
             materializeLazyCriteria(qc);
             Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
             Subquery<?> subquery = criteriaQuery.subquery(expectedType);
-            var creator = new JpaCriteriaQueryCreator(new Query.ProjectionList(), criteriaBuilder, (GrailsHibernatePersistentEntity) qc.getPersistentEntity(), (DetachedCriteria) qc, conversionService);
-            creator.setParentContext(fromsByProvider);
 
-            if (qc.getProjections().isEmpty() && propertyPath != null) {
+            Query.ProjectionList projectionList = new Query.ProjectionList();
+            for (Object p : qc.getProjections()) {
+                projectionList.add((Query.Projection) p);
+            }
+            // The default projection is local on purpose: translating a query must not mutate the criteria.
+            if (projectionList.isEmpty() && propertyPath != null) {
                 String propertyName = pc.getProperty();
                 if (propertyName.contains(grails.orm.HibernateCriteriaBuilder.ALIAS_SEPARATOR)) {
                     propertyName = propertyName.split(grails.orm.HibernateCriteriaBuilder.ALIAS_SEPARATOR)[1];
                 }
                 PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(propertyName);
                 if (prop != null) {
-                    qc.getProjections().add(Projections.property(propertyName));
+                    projectionList.add(Projections.property(propertyName));
                 }
             }
 
+            var creator = new JpaCriteriaQueryCreator(projectionList, criteriaBuilder, (GrailsHibernatePersistentEntity) qc.getPersistentEntity(), (DetachedCriteria) qc, conversionService);
+            creator.setParentContext(fromsByProvider);
             creator.populateSubquery((JpaSubQuery) subquery);
             return criteriaBuilder.equal(propertyPath, subquery);
         } else {
