@@ -95,6 +95,66 @@ class DetachedCriteriaProjectionSpec extends HibernateGormDatastoreSpec {
         then:
         results.size() == 1
     }
+
+    @Rollback
+    def 'get with several projections returns the values in projection order'() {
+        setup:
+        new DetachedEntity(entityId: 5L, field: 'tuple-test').save(flush: true)
+        new DetachedEntity(entityId: 7L, field: 'tuple-test').save(flush: true)
+
+        when:
+        def result = new DetachedCriteria(DetachedEntity).build {
+            projections {
+                min 'entityId'
+                max 'entityId'
+            }
+            eq 'field', 'tuple-test'
+        }.get()
+
+        then:
+        result[0] == 5L
+        result[1] == 7L
+    }
+
+    @Rollback
+    def 'list with several projections returns one tuple per row in projection order'() {
+        setup:
+        new DetachedEntity(entityId: 5L, field: 'tuple-test').save(flush: true)
+        new DetachedEntity(entityId: 7L, field: 'tuple-test').save(flush: true)
+
+        when:
+        def results = new DetachedCriteria(DetachedEntity).build {
+            projections {
+                property 'field'
+                property 'entityId'
+            }
+            eq 'field', 'tuple-test'
+            order 'entityId'
+        }.list()
+
+        then:
+        results.size() == 2
+        results[0][0] == 'tuple-test'
+        results[0][1] == 5L
+        results[1][0] == 'tuple-test'
+        results[1][1] == 7L
+    }
+
+    @Rollback
+    def 'get returns one of the matching rows when several rows match'() {
+        setup:
+        new DetachedEntity(entityId: 5L, field: 'multi-match').save(flush: true)
+        new DetachedEntity(entityId: 7L, field: 'multi-match').save(flush: true)
+
+        when:
+        def result = new DetachedCriteria(DetachedEntity).build {
+            eq 'field', 'multi-match'
+        }.get()
+
+        then: 'the current contract returns a row instead of failing; which one is not defined'
+        result != null
+        result.field == 'multi-match'
+    }
 }
 
 @Entity
