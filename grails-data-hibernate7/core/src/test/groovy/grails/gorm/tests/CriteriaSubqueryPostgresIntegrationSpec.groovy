@@ -105,6 +105,16 @@ class CriteriaSubqueryPostgresIntegrationSpec extends HibernateGormDatastoreSpec
         deleted == 1
         oracle('select name from postgres_subquery_entity order by name') == ['d', 'updated', 'updated', 'updated']
 
+        when: 'a delete selected by an exists subquery'
+        Number existsDeleted = PostgresSubqueryEntity.where {
+            exists(PostgresSubqueryEntity.where { eq('name', 'd') })
+        }.deleteAll()
+        manager.session.clear()
+
+        then: 'the uncorrelated exists is true for every remaining row'
+        existsDeleted == 4
+        oracle('select name from postgres_subquery_entity order by name') == []
+
         where:
         db         | container
         'postgres' | postgres

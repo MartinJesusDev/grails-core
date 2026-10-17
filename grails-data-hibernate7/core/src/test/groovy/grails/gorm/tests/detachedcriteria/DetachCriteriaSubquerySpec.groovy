@@ -261,6 +261,24 @@ class DetachCriteriaSubquerySpec extends HibernateGormDatastoreSpec {
         result*.name == ['B']
     }
 
+    void "test a cross-entity subquery selects rows through an association"() {
+        setup:
+        Organisation orgA = new Organisation(name: 'A')
+        orgA.addToUsers(email: 'u1@a')
+        orgA.save(flush: true)
+        Organisation orgB = new Organisation(name: 'B')
+        orgB.addToUsers(email: 'u2@b')
+        orgB.save(flush: true)
+
+        when:
+        List<User> users = User.where {
+            inList('organisation', Organisation.where { eq('name', 'A') })
+        }.list()
+
+        then:
+        users*.email == ['u1@a']
+    }
+
     private User createUser(String email) {
         User user = new User(email: email)
         Organisation defaultOrg = Organisation.findOrCreateByName("default")

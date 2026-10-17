@@ -22,7 +22,6 @@ import grails.gorm.DetachedCriteria
 import grails.gorm.annotation.Entity
 import grails.gorm.hibernate.HibernateEntity
 import grails.gorm.tests.HibernateGormDatastoreSpec
-import org.springframework.dao.InvalidDataAccessResourceUsageException
 
 /**
  * Bulk writes that select their rows with a subquery. The mutation path builds HQL through
@@ -37,7 +36,7 @@ import org.springframework.dao.InvalidDataAccessResourceUsageException
 class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
 
     def setupSpec() {
-        manager.registerDomainClasses(WriteOperationEntity)
+        manager.registerDomainClasses(WriteOperationEntity, WriteOperationParent, WriteOperationChild)
     }
 
     private void seed() {
@@ -180,28 +179,62 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         remainingNames() == ['a', 'b', 'c', 'd', 'e']
     }
 
-    void "test a write selected by an exists subquery is rejected loudly"() {
+    void "test a write selected by an exists subquery follows the subquery result"() {
         given:
         seed()
-        def existsSubquery = WriteOperationEntity.where {
-            projections { property('amount') }
-            eq('name', 'a')
-        }
 
-        when: 'the mutation path does not support exists yet'
-        WriteOperationEntity.where { exists(existsSubquery) }.deleteAll()
-
-        then: 'it fails with a clear message instead of deleting every row'
-        InvalidDataAccessResourceUsageException e = thrown()
-        e.message.contains('not supported')
-        WriteOperationEntity.count() == 5
-
-        when: 'the same for notExists and updateAll'
-        WriteOperationEntity.where { notExists(existsSubquery) }.updateAll([name: 'updated'])
+        when: 'no row matches the subquery'
+        Number noneDeleted = WriteOperationEntity.where {
+            exists(WriteOperationEntity.where { eq('name', 'no-such-name') })
+        }.deleteAll()
 
         then:
-        thrown(InvalidDataAccessResourceUsageException)
+        noneDeleted == 0
         remainingNames() == ['a', 'b', 'c', 'd', 'e']
+
+        when: 'the subquery matches a row'
+        Number allDeleted = WriteOperationEntity.where {
+            exists(WriteOperationEntity.where { eq('name', 'a') })
+        }.deleteAll()
+        manager.session.clear()
+
+        then: 'an uncorrelated exists is true for every outer row'
+        allDeleted == 5
+        remainingNames() == []
+    }
+
+    void "test updateAll selects its rows with a notExists subquery"() {
+        given:
+        seed()
+
+        when: 'the subquery matches nothing, so NOT EXISTS is true for every row'
+        Number updated = WriteOperationEntity.where {
+            notExists(WriteOperationEntity.where { eq('name', 'no-such-name') })
+        }.updateAll([name: 'updated'])
+        manager.session.clear()
+
+        then:
+        updated == 5
+        WriteOperationEntity.where {}.list()*.name.unique() == ['updated']
+    }
+
+    void "test a cross-entity write selects rows through an association subquery"() {
+        given:
+        def parentA = new WriteOperationParent(name: 'p-a').save(flush: true)
+        def parentB = new WriteOperationParent(name: 'p-b').save(flush: true)
+        new WriteOperationChild(parent: parentA, name: 'child').save(flush: true)
+        new WriteOperationChild(parent: parentB, name: 'other').save(flush: true)
+
+        when: 'children of the parents selected by the subquery'
+        Number deleted = WriteOperationChild.where {
+            inList('parent', WriteOperationParent.where { eq('name', 'p-a') })
+        }.deleteAll()
+        manager.session.clear()
+
+        then: 'only the matching child is deleted and the parents are untouched'
+        deleted == 1
+        WriteOperationChild.where {}.list()*.name == ['other']
+        WriteOperationParent.where {}.list()*.name.sort() == ['p-a', 'p-b']
     }
 }
 
@@ -210,4 +243,20 @@ class WriteOperationEntity implements HibernateEntity<WriteOperationEntity> {
 
     String name
     Integer amount
+}
+
+@Entity
+class WriteOperationParent implements HibernateEntity<WriteOperationParent> {
+
+    String name
+
+    static hasMany = [children: WriteOperationChild]
+}
+
+@Entity
+class WriteOperationChild implements HibernateEntity<WriteOperationChild> {
+
+    String name
+
+    static belongsTo = [parent: WriteOperationParent]
 }
