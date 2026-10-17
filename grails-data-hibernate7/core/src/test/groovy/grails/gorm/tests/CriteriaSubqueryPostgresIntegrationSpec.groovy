@@ -48,19 +48,7 @@ class CriteriaSubqueryPostgresIntegrationSpec extends HibernateGormDatastoreSpec
 
     void "comparison subqueries match the SQL semantics on #db"() {
         given:
-        if (!container.isRunning()) {
-            container.start()
-        }
-        manager.destroy()
-        manager.grailsConfig = [
-                'dataSource.url'            : container.jdbcUrl,
-                'dataSource.driverClassName': container.driverClassName,
-                'dataSource.username'       : container.username,
-                'dataSource.password'       : container.password,
-                'dataSource.dbCreate'       : 'create-drop',
-                'hibernate.show_sql'        : 'true',
-        ]
-        manager.setup(this.class)
+        configurePostgres(container)
         seed()
 
         expect: 'gtAll over an empty subquery is vacuously true'
@@ -96,6 +84,48 @@ class CriteriaSubqueryPostgresIntegrationSpec extends HibernateGormDatastoreSpec
         'postgres' | postgres
     }
 
+    void "write operations select their rows with a subquery on #db"() {
+        given:
+        configurePostgres(container)
+        seed()
+
+        when: 'an update selected by a subquery'
+        Number updated = PostgresSubqueryEntity.where { inList('amount', amountsBelow(3)) }.updateAll([name: 'updated'])
+        manager.session.clear()
+
+        then:
+        updated == 3
+        oracle('select name from postgres_subquery_entity where amount in (select amount from postgres_subquery_entity where amount < ?) order by name', [3]) == ['updated', 'updated', 'updated']
+
+        when: 'a delete selected by a subquery'
+        Number deleted = PostgresSubqueryEntity.where { inList('amount', valuesOf('c')) }.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 1
+        oracle('select name from postgres_subquery_entity order by name') == ['d', 'updated', 'updated', 'updated']
+
+        where:
+        db         | container
+        'postgres' | postgres
+    }
+
+    private void configurePostgres(PostgreSQLContainer container) {
+        if (!container.isRunning()) {
+            container.start()
+        }
+        manager.destroy()
+        manager.grailsConfig = [
+                'dataSource.url'            : container.jdbcUrl,
+                'dataSource.driverClassName': container.driverClassName,
+                'dataSource.username'       : container.username,
+                'dataSource.password'       : container.password,
+                'dataSource.dbCreate'       : 'create-drop',
+                'hibernate.show_sql'        : 'true',
+        ]
+        manager.setup(this.class)
+    }
+
     private void seed() {
         new PostgresSubqueryEntity(name: 'a', amount: 1).save(flush: true)
         new PostgresSubqueryEntity(name: 'b', amount: 2).save(flush: true)
@@ -108,6 +138,13 @@ class CriteriaSubqueryPostgresIntegrationSpec extends HibernateGormDatastoreSpec
         PostgresSubqueryEntity.where {
             projections { property('amount') }
             inList('name', names as List)
+        }
+    }
+
+    private static DetachedCriteria<PostgresSubqueryEntity> amountsBelow(int limit) {
+        PostgresSubqueryEntity.where {
+            projections { property('amount') }
+            lt('amount', limit)
         }
     }
 
