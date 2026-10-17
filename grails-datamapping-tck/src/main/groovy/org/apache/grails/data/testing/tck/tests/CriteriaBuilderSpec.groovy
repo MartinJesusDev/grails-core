@@ -120,6 +120,29 @@ class CriteriaBuilderSpec extends GrailsDataTckSpec {
         1 == results.size()
     }
 
+    void 'Test inList with values, duplicates and an empty list'() {
+        given:
+        ['Bob', 'Fred', 'Barney'].each { new TestEntity(name: it).save(flush: true) }
+
+        when:
+        def duplicates = TestEntity.withCriteria { inList('name', ['Bob', 'Bob', 'Fred']) }
+
+        then: 'duplicates do not change the result'
+        duplicates*.name.sort() == ['Bob', 'Fred']
+
+        when: 'an empty list matches nothing'
+        def empty = TestEntity.withCriteria { inList('name', []) }
+
+        then:
+        empty.isEmpty()
+
+        when: 'negating the membership'
+        def negated = TestEntity.withCriteria { not { inList('name', ['Bob', 'Fred']) } }
+
+        then:
+        negated*.name == ['Barney']
+    }
+
     void 'Test list() query'() {
         given:
         def age = 40

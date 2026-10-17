@@ -89,4 +89,36 @@ class NegationSpec extends GrailsDataTckSpec {
         results.find { it.author == 'Stieg Larsson' } != null
         results.find { it.author == 'Stephen King' && it.title == 'The Shining' } != null
     }
+
+    void 'Test negation of a junction pair follows De Morgan semantics'() {
+        given: 'one row for every combination of the two predicates'
+        new Book(title: 'The Stand', author: 'Stephen King').save()
+        new Book(title: 'Along Came a Spider', author: 'James Patterson').save()
+        new Book(title: 'The Stand', author: 'James Patterson').save()
+        new Book(title: 'The Shining', author: 'Stephen King').save(flush: true)
+
+        when: 'two criteria are added directly to a negated junction'
+        def orNegation = Book.withCriteria {
+            not {
+                eq('title', 'The Stand')
+                eq('author', 'James Patterson')
+            }
+        }
+
+        then: 'not { a; b } means NOT(a OR b), so only the row matching neither predicate survives'
+        orNegation*.title.sort() == ['The Shining']
+
+        when: 'the conjunction is explicit inside the negation'
+        def andNegation = Book.withCriteria {
+            not {
+                and {
+                    eq('title', 'The Stand')
+                    eq('author', 'James Patterson')
+                }
+            }
+        }
+
+        then: 'not { and { a; b } } means NOT(a AND b), so only the row matching both is removed'
+        andNegation*.title.sort() == ['Along Came a Spider', 'The Shining', 'The Stand']
+    }
 }
