@@ -617,7 +617,7 @@ public class JpaQueryBuilder {
                            .append(" IN (");
                 QueryableCriteria subquery = inQuery.getSubquery();
                 if (subquery != null) {
-                    buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, subquery);
+                    position = buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, subquery);
                 }
                 else {
                     for (Iterator i = inQuery.getValues().iterator(); i.hasNext();) {
@@ -770,7 +770,7 @@ public class JpaQueryBuilder {
                 .append(DOT)
                 .append(name)
                 .append(comparisonExpression);
-        buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, subquery);
+        position = buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, subquery);
         whereClause.append(CLOSE_BRACKET);
         return position;
     }
@@ -792,7 +792,7 @@ public class JpaQueryBuilder {
         return position;
     }
 
-    protected static void buildSubQuery(StringBuilder q, StringBuilder whereClause, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible, QueryableCriteria subquery) {
+    protected static int buildSubQuery(StringBuilder q, StringBuilder whereClause, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible, QueryableCriteria subquery) {
         PersistentEntity associatedEntity = subquery.getPersistentEntity();
         String associatedEntityName = associatedEntity.getName();
         String associatedEntityLogicalName = associatedEntity.getDecapitalizedName() + position;
@@ -806,8 +806,12 @@ public class JpaQueryBuilder {
         List<Query.Criterion> criteria = subquery.getCriteria();
         for (Query.Criterion subCriteria : criteria) {
             QueryHandler queryHandler = queryHandlers.get(subCriteria.getClass());
-            queryHandler.handle(associatedEntity, subCriteria, q, whereClause, associatedEntityLogicalName, position, parameters, conversionService, allowJoins, hibernateCompatible);
+            if (queryHandler == null) {
+                throw new InvalidDataAccessResourceUsageException("Queries of type " + subCriteria.getClass().getSimpleName() + " are not supported by this implementation");
+            }
+            position = queryHandler.handle(associatedEntity, subCriteria, q, whereClause, associatedEntityLogicalName, position, parameters, conversionService, allowJoins, hibernateCompatible);
         }
+        return position;
     }
 
     private static int handleAssociationCriteria(StringBuilder query, StringBuilder whereClause, String logicalName, int position, List parameters, ConversionService conversionService, boolean allowJoins, Association<?> association, Query.Junction associationCriteria, List<Query.Criterion> associationCriteriaList, boolean hibernateCompatible) {
