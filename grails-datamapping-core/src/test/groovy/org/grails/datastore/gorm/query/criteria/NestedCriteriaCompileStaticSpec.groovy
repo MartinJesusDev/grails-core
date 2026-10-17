@@ -292,6 +292,36 @@ class NestedCriteriaCompileStaticSpec extends Specification {
         ((Query.SubqueryCriterion) forms.gtAllClosure.static.criteria[0]).value.projections*.class == [Query.IdProjection]
     }
 
+    void 'a nested where inside a lazy criteria binds to its own criteria when materialized'() {
+        when:
+        DetachedCriteria criteria = (DetachedCriteria) compileAndRun(BUILD_LAZY_SOURCE)
+        criteria.add(new Query.Equals('name', 'Y'))
+
+        then: 'materializing the lazy criteria applies the closure on the criteria itself'
+        criteria.criteria.size() == 2
+        criteria.criteria[0] instanceof Query.Exists
+        Query.Exists exists = (Query.Exists) criteria.criteria[0]
+        exists.subquery.criteria.size() == 1
+        ((Query.Equals) exists.subquery.criteria[0]).property == 'title'
+
+        and: 'the criterion added afterwards is appended, not diverted'
+        Query.Equals added = (Query.Equals) criteria.criteria[1]
+        added.property == 'name'
+        added.value == 'Y'
+    }
+
+    void 'name resolution inside a junction closure prefers the criteria delegate'() {
+        when:
+        DetachedCriteria criteria = (DetachedCriteria) compileAndRun(JUNCTION_NAME_RESOLUTION_SOURCE)
+
+        then: 'the class getOrders() value is not used; the criteria order list is'
+        criteria.criteria.size() == 1
+        criteria.criteria[0] instanceof Query.Disjunction
+        Query.In in = (Query.In) ((Query.Disjunction) criteria.criteria[0]).criteria[0]
+        in.property == 'name'
+        in.values.isEmpty()
+    }
+
     static Class compile(String source) {
         new GroovyClassLoader(NestedCriteriaCompileStaticSpec.classLoader).parseClass(source)
     }
@@ -437,6 +467,56 @@ class NameResolutionHolder {
 
 @Entity
 class NameResolutionBook {
+    String name
+}
+'''
+
+    private static final String BUILD_LAZY_SOURCE = '''
+import grails.gorm.DetachedCriteria
+import grails.gorm.annotation.Entity
+import groovy.transform.CompileStatic
+
+@CompileStatic
+class BuildLazyHolder {
+    static DetachedCriteria<BuildLazyAuthor> run() {
+        DetachedCriteria<BuildLazyBook> books = new DetachedCriteria<BuildLazyBook>(BuildLazyBook)
+        new DetachedCriteria<BuildLazyAuthor>(BuildLazyAuthor).buildLazy {
+            exists books.where { eq 'title', 'X' }.id()
+        }
+    }
+}
+
+@Entity
+class BuildLazyAuthor {
+    String name
+}
+
+@Entity
+class BuildLazyBook {
+    String title
+}
+'''
+
+    private static final String JUNCTION_NAME_RESOLUTION_SOURCE = '''
+import grails.gorm.DetachedCriteria
+import grails.gorm.annotation.Entity
+import groovy.transform.CompileStatic
+
+@CompileStatic
+class JunctionNameResolutionHolder {
+    List<String> getOrders() { ['from-class'] }
+
+    static DetachedCriteria<JunctionNameResolutionBook> run() {
+        new JunctionNameResolutionHolder().query()
+    }
+
+    DetachedCriteria<JunctionNameResolutionBook> query() {
+        new DetachedCriteria<JunctionNameResolutionBook>(JunctionNameResolutionBook).or { inList 'name', orders }
+    }
+}
+
+@Entity
+class JunctionNameResolutionBook {
     String name
 }
 '''
