@@ -127,6 +127,66 @@ class CriteriaSubqueryMatrixSpec extends HibernateGormDatastoreSpec {
         and: 'ne keeps rows whose value is null, like the value form does'
         SubqueryMatrixEntity.where { ne('amount', valuesOf('a')) }.list()*.name.sort() == ['b', 'c', 'd', 'e']
     }
+
+    void "test two subqueries combine with and and or in one query"() {
+        given:
+        seedValues()
+
+        expect: 'the intersection of both selections is empty'
+        SubqueryMatrixEntity.where {
+            inList('name', namesWithAmount(2))
+            inList('amount', valuesOf('c'))
+        }.list().isEmpty()
+
+        and: 'the union of both selections'
+        SubqueryMatrixEntity.where {
+            or {
+                inList('name', namesWithAmount(2))
+                inList('amount', valuesOf('c'))
+            }
+        }.list()*.name.sort() == ['b', 'c', 'e']
+    }
+
+    void "test nested exists two levels deep"() {
+        given:
+        seedValues()
+
+        expect: 'a row exists for which a row named a exists'
+        SubqueryMatrixEntity.where {
+            exists(SubqueryMatrixEntity.where {
+                exists(SubqueryMatrixEntity.where { eq('name', 'a') })
+            })
+        }.list()*.name.sort() == ['a', 'b', 'c', 'd', 'e']
+
+        and: 'the inner restriction is respected'
+        SubqueryMatrixEntity.where {
+            exists(SubqueryMatrixEntity.where {
+                exists(SubqueryMatrixEntity.where { eq('name', 'no-such-name') })
+            })
+        }.list().isEmpty()
+    }
+
+    void "test count and pagination work with a subquery criterion"() {
+        given:
+        seedValues()
+
+        expect:
+        SubqueryMatrixEntity.where { gtSome('amount', valuesOf('a', 'd')) }.count() == 3
+
+        when:
+        def page = SubqueryMatrixEntity.where { gtSome('amount', valuesOf('a', 'd')) }.list(max: 2)
+
+        then: 'the page is limited while the total count sees every match'
+        page.size() == 2
+        page.totalCount == 3
+    }
+
+    private static DetachedCriteria<SubqueryMatrixEntity> namesWithAmount(int amount) {
+        SubqueryMatrixEntity.where {
+            projections { property('name') }
+            eq('amount', amount)
+        }
+    }
 }
 
 @Entity
