@@ -771,14 +771,4 @@ class DetachedCriteria<T> extends AbstractDetachedCriteria<T> implements GormOpe
         }
     }
 
-    protected void applyLazyCriteria() {
-        if (lazyQuery == null) {
-            return
-        }
-
-        def criteria = lazyQuery
-        lazyQuery = null
-        this.with(criteria)
-    }
-
 }
