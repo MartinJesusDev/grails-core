@@ -1108,7 +1108,14 @@ abstract class AbstractDetachedCriteria<T> implements Criteria, Cloneable {
 
     protected abstract QueryableCriteria buildQueryableCriteria(Closure queryClosure)
 
-    protected void applyLazyCriteria() {
+    /**
+     * Applies a pending {@code buildLazy} closure, if any, so the criteria can be read by a query
+     * implementation. Query implementations call this before they translate a criteria that only
+     * appears as a subquery value; the executed root criteria is materialized by
+     * {@link grails.gorm.DetachedCriteria}. Idempotent: once applied, the deferred closure is
+     * cleared.
+     */
+    void applyLazyCriteria() {
         if (lazyQuery == null) {
             return
         }
