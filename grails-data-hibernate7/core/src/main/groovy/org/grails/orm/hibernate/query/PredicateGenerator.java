@@ -623,22 +623,28 @@ public class PredicateGenerator {
             return criteriaBuilder.isNotNull(propertyPath);
         }
         if (value instanceof QueryableCriteria qc) {
+            materializeLazyCriteria(qc);
             Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
             Subquery<?> subquery = criteriaQuery.subquery(expectedType);
-            var creator = new JpaCriteriaQueryCreator(new Query.ProjectionList(), criteriaBuilder, (GrailsHibernatePersistentEntity) qc.getPersistentEntity(), (DetachedCriteria) qc, conversionService);
-            creator.setParentContext(fromsByProvider);
 
-            if (qc.getProjections().isEmpty() && propertyPath != null) {
+            Query.ProjectionList projectionList = new Query.ProjectionList();
+            for (Object p : qc.getProjections()) {
+                projectionList.add((Query.Projection) p);
+            }
+            // The default projection is local on purpose: translating a query must not mutate the criteria.
+            if (projectionList.isEmpty() && propertyPath != null) {
                 String propertyName = pc.getProperty();
                 if (propertyName.contains(grails.orm.HibernateCriteriaBuilder.ALIAS_SEPARATOR)) {
                     propertyName = propertyName.split(grails.orm.HibernateCriteriaBuilder.ALIAS_SEPARATOR)[1];
                 }
                 PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(propertyName);
                 if (prop != null) {
-                    qc.getProjections().add(Projections.property(propertyName));
+                    projectionList.add(Projections.property(propertyName));
                 }
             }
 
+            var creator = new JpaCriteriaQueryCreator(projectionList, criteriaBuilder, (GrailsHibernatePersistentEntity) qc.getPersistentEntity(), (DetachedCriteria) qc, conversionService);
+            creator.setParentContext(fromsByProvider);
             creator.populateSubquery((JpaSubQuery) subquery);
             return criteriaBuilder.or(criteriaBuilder.notEqual(propertyPath, subquery), criteriaBuilder.isNull(propertyPath));
         }
