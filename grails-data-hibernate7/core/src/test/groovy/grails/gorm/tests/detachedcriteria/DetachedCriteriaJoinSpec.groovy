@@ -158,4 +158,24 @@ class DetachedCriteriaJoinSpec extends HibernateGormDatastoreSpec {
         then:
         result == ['Team A', 'Team B']
     }
+
+    def 'check an aliased association filter returns the same rows on a repeated execution'() {
+        given:
+        def juventus = new Club(name: 'Juventus').save(flush: true)
+        def milan = new Club(name: 'Milan').save(flush: true)
+        new Team(name: 'Torino', club: juventus).save(flush: true)
+        new Team(name: 'Rossoneri', club: milan).save(flush: true)
+
+        when:
+        def criteria = Team.where {
+            createAlias('club', 'c')
+            eq('c.name', 'Juventus')
+        }
+        def first = criteria.list()*.name
+        def second = criteria.list()*.name
+
+        then: 'the alias and its join are not shared or lost between executions'
+        first == ['Torino']
+        second == first
+    }
 }
