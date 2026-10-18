@@ -223,6 +223,47 @@ class CriteriaSubqueryMatrixSpec extends HibernateGormDatastoreSpec {
         page.totalCount == 2
     }
 
+    void "test projections combine with a subquery criterion"() {
+        given:
+        seedValues()
+
+        when:
+        def names = SubqueryMatrixEntity.where {
+            projections { property('name') }
+            gtSome('amount', valuesOf('a', 'd'))
+        }.list()
+
+        then:
+        names.sort() == ['b', 'c', 'e']
+
+        when:
+        def grouped = SubqueryMatrixEntity.where {
+            projections {
+                groupProperty('name')
+                count()
+            }
+            gtSome('amount', valuesOf('a', 'd'))
+        }.list()
+
+        then: 'every matching row is its own group'
+        grouped.size() == 3
+        grouped.every { it[1] == 1L }
+    }
+
+    void "test sqlRestriction combines with a subquery criterion"() {
+        given:
+        seedValues()
+
+        when:
+        def names = SubqueryMatrixEntity.where {
+            sqlRestriction('length(name) > 0')
+            gtSome('amount', valuesOf('a', 'd'))
+        }.list()*.name
+
+        then:
+        names.sort() == ['b', 'c', 'e']
+    }
+
     private static DetachedCriteria<SubqueryMatrixEntity> namesWithAmount(int amount) {
         SubqueryMatrixEntity.where {
             projections { property('name') }
