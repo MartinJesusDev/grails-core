@@ -636,6 +636,12 @@ public class HibernateQuery extends Query {
         this.readOnly = readOnly;
     }
 
+    @Override
+    public Query readOnly(boolean readOnly) {
+        this.readOnly = readOnly;
+        return this;
+    }
+
     public DetachedCriteria<?> getHibernateCriteria() {
         return detachedCriteria;
     }

@@ -54,6 +54,8 @@ abstract class AbstractDetachedCriteria<T> implements Criteria, Cloneable {
     protected List<FinderMethod> dynamicFinders
     protected Integer defaultOffset
     protected Integer defaultMax
+    private boolean cache
+    private boolean readOnly
 
     protected List<Query.Junction> junctions = []
     protected PersistentEntity persistentEntity
@@ -1145,13 +1147,21 @@ abstract class AbstractDetachedCriteria<T> implements Criteria, Cloneable {
 
     @Override
     Criteria cache(boolean shouldCache) {
-        // no-op for now
+        this.cache = shouldCache
         this
+    }
+
+    boolean isCache() {
+        cache
     }
 
     @Override
     Criteria readOnly(boolean readOnly) {
-        // no-op for now
+        this.readOnly = readOnly
         this
+    }
+
+    boolean isReadOnly() {
+        readOnly
     }
 }

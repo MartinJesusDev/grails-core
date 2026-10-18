@@ -158,6 +158,17 @@ public abstract class Query implements Cloneable, Serializable {
     }
 
     /**
+     * Specifies whether the entities the query loads should be read only, so they are not dirty checked.
+     * A datastore that supports the setting overrides this method.
+     *
+     * @param readOnly True if the entities should be read only
+     * @return The query
+     */
+    public Query readOnly(boolean readOnly) {
+        return this;
+    }
+
+    /**
      * Specifies whether the query should obtain a pessimistic lock
      *
      * @param lock True if a lock should be obtained

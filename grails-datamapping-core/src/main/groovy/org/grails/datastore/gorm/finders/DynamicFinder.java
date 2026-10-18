@@ -583,6 +583,12 @@ public class DynamicFinder implements FinderGrammar {
      */
     public static void applyDetachedCriteria(Query query, AbstractDetachedCriteria detachedCriteria) {
         if (detachedCriteria != null) {
+            if (detachedCriteria.isReadOnly()) {
+                query.readOnly(true);
+            }
+            if (detachedCriteria.isCache()) {
+                query.cache(true);
+            }
             Map<String, FetchType> fetchStrategies = detachedCriteria.getFetchStrategies();
             for (Map.Entry<String, FetchType> entry : fetchStrategies.entrySet()) {
                 String property = entry.getKey();
