@@ -21,6 +21,8 @@ package grails.gorm.tests.detachedcriteria
 import grails.gorm.annotation.Entity
 import grails.gorm.hibernate.HibernateEntity
 import grails.gorm.tests.HibernateGormDatastoreSpec
+import org.hibernate.annotations.Filter
+import org.hibernate.annotations.FilterDef
 import org.hibernate.annotations.Formula
 import org.hibernate.annotations.SQLRestriction
 
@@ -31,7 +33,7 @@ import org.hibernate.annotations.SQLRestriction
 class CriteriaMappingFeaturesSpec extends HibernateGormDatastoreSpec {
 
     def setupSpec() {
-        manager.registerDomainClasses(FormulaEntity, AnnotatedFormulaEntity, RestrictedEntity)
+        manager.registerDomainClasses(FormulaEntity, AnnotatedFormulaEntity, RestrictedEntity, FilteredEntity)
     }
 
     void "a criteria queries and orders by an annotated formula property"() {
@@ -82,6 +84,24 @@ class CriteriaMappingFeaturesSpec extends HibernateGormDatastoreSpec {
         RestrictedEntity.where {}.list()*.name == ['renamed']
     }
 
+    void "a criteria honours an enabled Hibernate filter"() {
+        given:
+        new FilteredEntity(name: 'visible', active: true).save(flush: true)
+        new FilteredEntity(name: 'hidden', active: false).save(flush: true)
+
+        when:
+        def withoutFilter = FilteredEntity.where {}.list()*.name.sort()
+        datastore.sessionFactory.currentSession.enableFilter('activeOnly')
+        def withFilter = FilteredEntity.where {}.list()*.name
+        datastore.sessionFactory.currentSession.disableFilter('activeOnly')
+        def afterDisable = FilteredEntity.where {}.list()*.name.sort()
+
+        then:
+        withoutFilter == ['hidden', 'visible']
+        withFilter == ['visible']
+        afterDisable == ['hidden', 'visible']
+    }
+
     void "a criteria queries and orders by a formula property"() {
         given:
         new FormulaEntity(name: 'a', amount: 1).save(flush: true)
@@ -126,6 +146,15 @@ class AnnotatedFormulaEntity implements HibernateEntity<AnnotatedFormulaEntity> 
 @Entity
 @SQLRestriction('active = true')
 class RestrictedEntity implements HibernateEntity<RestrictedEntity> {
+
+    String name
+    Boolean active
+}
+
+@Entity
+@FilterDef(name = 'activeOnly', defaultCondition = 'active = true')
+@Filter(name = 'activeOnly')
+class FilteredEntity implements HibernateEntity<FilteredEntity> {
 
     String name
     Boolean active
