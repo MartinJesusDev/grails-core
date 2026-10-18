@@ -874,6 +874,31 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         deleted == 5
     }
 
+    void "test a bulk update sets and clears an association"() {
+        given:
+        def parentA = new WriteOperationParent(name: 'a').save(flush: true)
+        def parentB = new WriteOperationParent(name: 'b').save(flush: true)
+        new WriteOperationChild(name: 'c', parent: parentA).save(flush: true)
+
+        when: 'the child moves to the other parent'
+        Number updated = WriteOperationChild.where { eq('parent.id', parentA.id) }.updateAll([parent: parentB])
+        manager.session.clear()
+        def moved = WriteOperationChild.where { eq('parent.id', parentB.id) }.list()*.name
+
+        then:
+        updated == 1
+        moved == ['c']
+
+        when: 'the association is cleared'
+        Number cleared = WriteOperationChild.where { eq('name', 'c') }.updateAll([parent: null])
+        manager.session.clear()
+        def orphans = WriteOperationChild.where { isNull('parent') }.list()*.name
+
+        then:
+        cleared == 1
+        orphans == ['c']
+    }
+
     void "test a bulk write does not mutate the criteria"() {
         given:
         seed()
