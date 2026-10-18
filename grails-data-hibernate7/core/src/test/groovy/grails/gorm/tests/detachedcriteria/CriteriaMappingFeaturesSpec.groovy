@@ -21,6 +21,8 @@ package grails.gorm.tests.detachedcriteria
 import grails.gorm.annotation.Entity
 import grails.gorm.hibernate.HibernateEntity
 import grails.gorm.tests.HibernateGormDatastoreSpec
+import org.hibernate.annotations.Formula
+import org.hibernate.annotations.SQLRestriction
 
 /**
  * Criteria next to a formula property: the mapping DSL declares the derived column and a query
@@ -29,7 +31,55 @@ import grails.gorm.tests.HibernateGormDatastoreSpec
 class CriteriaMappingFeaturesSpec extends HibernateGormDatastoreSpec {
 
     def setupSpec() {
-        manager.registerDomainClasses(FormulaEntity)
+        manager.registerDomainClasses(FormulaEntity, AnnotatedFormulaEntity, RestrictedEntity)
+    }
+
+    void "a criteria queries and orders by an annotated formula property"() {
+        given:
+        new AnnotatedFormulaEntity(name: 'a', amount: 1).save(flush: true)
+        new AnnotatedFormulaEntity(name: 'b', amount: 2).save(flush: true)
+        new AnnotatedFormulaEntity(name: 'c', amount: 3).save(flush: true)
+
+        when:
+        def doubled = AnnotatedFormulaEntity.where { doubled > 3 }.list()*.name.sort()
+        def ordered = AnnotatedFormulaEntity.where {}.list(sort: 'doubled', order: 'desc')*.name
+        manager.session.clear()
+        def values = AnnotatedFormulaEntity.where {}.list().collect { [it.name, it.doubled] }
+
+        then:
+        doubled == ['b', 'c']
+        ordered == ['c', 'b', 'a']
+        values == [['a', 2], ['b', 4], ['c', 6]]
+    }
+
+    void "the sql restriction of an entity is part of every query"() {
+        given:
+        new RestrictedEntity(name: 'visible', active: true).save(flush: true)
+        new RestrictedEntity(name: 'hidden', active: false).save(flush: true)
+
+        when:
+        def all = RestrictedEntity.where {}.list()*.name
+        def count = RestrictedEntity.where {}.count()
+        def hidden = RestrictedEntity.where { eq('name', 'hidden') }.list()
+
+        then: 'the restriction is part of the criteria and of its count'
+        all == ['visible']
+        count == 1
+        hidden.isEmpty()
+    }
+
+    void "the sql restriction of an entity is part of a bulk update"() {
+        given:
+        new RestrictedEntity(name: 'visible', active: true).save(flush: true)
+        new RestrictedEntity(name: 'hidden', active: false).save(flush: true)
+
+        when:
+        Number updated = RestrictedEntity.where {}.updateAll([name: 'renamed'])
+        manager.session.clear()
+
+        then: 'only the rows the restriction allows are updated'
+        updated == 1
+        RestrictedEntity.where {}.list()*.name == ['renamed']
     }
 
     void "a criteria queries and orders by a formula property"() {
@@ -61,4 +111,22 @@ class FormulaEntity implements HibernateEntity<FormulaEntity> {
     static mapping = {
         doubled formula: 'amount * 2'
     }
+}
+
+@Entity
+class AnnotatedFormulaEntity implements HibernateEntity<AnnotatedFormulaEntity> {
+
+    String name
+    Integer amount
+
+    @Formula('amount * 2')
+    Integer doubled
+}
+
+@Entity
+@SQLRestriction('active = true')
+class RestrictedEntity implements HibernateEntity<RestrictedEntity> {
+
+    String name
+    Boolean active
 }

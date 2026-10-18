@@ -60,10 +60,24 @@ public class RootPersistentClassCommonValuesBinder {
         this.mappings = mappings;
     }
 
+
+    /**
+     * The SQL restriction an entity declares with the Hibernate annotation, so every query of the
+     * entity carries it, like the annotation binder of Hibernate does.
+     */
+    private static void applySqlRestriction(HibernatePersistentEntity hibernatePersistentEntity, RootClass root) {
+        Class<?> javaClass = hibernatePersistentEntity.getJavaClass();
+        org.hibernate.annotations.SQLRestriction restriction = javaClass.getAnnotation(org.hibernate.annotations.SQLRestriction.class);
+        if (restriction != null) {
+            root.setWhere(restriction.value());
+        }
+    }
+
     public RootClass bindRoot(@Nonnull HibernatePersistentEntity hibernatePersistentEntity) {
 
         RootClass root = new RootClass(this.metadataBuildingContext);
         classBinder.bindClass(hibernatePersistentEntity, root);
+        applySqlRestriction(hibernatePersistentEntity, root);
 
         // get the schema and catalog names from the configuration
         Mapping gormMapping = hibernatePersistentEntity.getHibernateMappedForm();
