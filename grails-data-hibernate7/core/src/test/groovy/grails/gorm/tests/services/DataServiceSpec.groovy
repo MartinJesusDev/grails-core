@@ -308,6 +308,20 @@ class DataServiceSpec extends Specification {
         carrot == ['Carrot']
     }
 
+    void "test @where annotation with an aggregate subquery"() {
+        given:
+        ProductService productService = datastore.getService(ProductService)
+        new Product(name: 'Carrot', type: 'Vegetable', amount: 1).save(flush: true)
+        new Product(name: 'Pumpkin', type: 'Vegetable', amount: 5).save(flush: true)
+        new Product(name: 'Tomato', type: 'Fruit', amount: 3).save(flush: true)
+
+        when:
+        def aboveAverage = productService.listAboveAverageAmount()*.name.sort()
+
+        then: 'the average amount is 3, so only the pumpkin is above it'
+        aboveAverage == ['Pumpkin']
+    }
+
     void "test @query annotation"() {
         given:
         ProductService productService = datastore.getService(ProductService)
@@ -513,6 +527,9 @@ interface ProductService {
 
     @Where({ upper(name) == 'CARROT' })
     List<Product> listNamedCarrot()
+
+    @Where({ amount > avg(amount) })
+    List<Product> listAboveAverageAmount()
 
     List<String> listProductName(String type)
 
