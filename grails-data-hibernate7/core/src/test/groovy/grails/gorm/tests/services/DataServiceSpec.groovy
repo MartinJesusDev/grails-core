@@ -294,6 +294,20 @@ class DataServiceSpec extends Specification {
 
     }
 
+    void "test @where annotation with a function call"() {
+        given:
+        ProductService productService = datastore.getService(ProductService)
+        new Product(name: 'Carrot', type: 'Vegetable', amount: 1).save(flush: true)
+        new Product(name: 'Pumpkin', type: 'Vegetable', amount: 5).save(flush: true)
+        new Product(name: 'Tomato', type: 'Fruit', amount: 3).save(flush: true)
+
+        when:
+        def carrot = productService.listNamedCarrot()*.name
+
+        then: 'the function compares its uppercase result with an uppercase literal, like SQL does'
+        carrot == ['Carrot']
+    }
+
     void "test @query annotation"() {
         given:
         ProductService productService = datastore.getService(ProductService)
@@ -416,6 +430,7 @@ interface ProductInfo {
 class Product {
     String name
     String type
+    Integer amount
     Set attributes
 
     static hasMany = [attributes:Attribute]
@@ -495,6 +510,9 @@ interface ProductService {
 
     @Where({ type ==~ pattern })
     Number howManyProducts(String pattern)
+
+    @Where({ upper(name) == 'CARROT' })
+    List<Product> listNamedCarrot()
 
     List<String> listProductName(String type)
 
