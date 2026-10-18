@@ -41,6 +41,7 @@ import org.grails.datastore.mapping.query.AssociationQuery;
 import org.grails.datastore.mapping.query.Query;
 import org.grails.datastore.mapping.query.api.AssociationCriteria;
 import org.grails.datastore.mapping.query.api.QueryableCriteria;
+import org.grails.datastore.mapping.query.criteria.FunctionCallingCriterion;
 
 /**
  * Builds JPA 1.0 String-based queries from the Query model
@@ -268,6 +269,20 @@ public class JpaQueryBuilder {
             .append(operator)
             .append(PARAMETER_PREFIX)
             .append(++position);
+        return position;
+    }
+
+    /**
+     * Renders a comparison whose right side is a subquery, for example
+     * {@code age > (select avg(age) from Person)}. The subquery may refer to the enclosing query
+     * through the {alias} placeholder.
+     */
+    private int appendSubqueryComparison(StringBuilder q, StringBuilder whereClause, String logicalName, String name, String operator, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible, QueryableCriteria subquery, PersistentEntity entity) {
+        whereClause.append(resolvePropertyPath(logicalName, name))
+                .append(operator)
+                .append(OPEN_BRACKET);
+        position = buildSubQuery(q, whereClause, position, parameters, conversionService, allowJoins, hibernateCompatible, subquery, logicalName, entity);
+        whereClause.append(CLOSE_BRACKET);
         return position;
     }
 
@@ -501,6 +516,9 @@ public class JpaQueryBuilder {
                 final String name = eq.getProperty();
                 PersistentProperty prop = validateProperty(entity, name, Query.GreaterThan.class);
                 Class propType = prop.getType();
+                if (eq.getValue() instanceof QueryableCriteria subquery) {
+                    return appendSubqueryComparison(q, whereClause, logicalName, name, " > ", position, parameters, conversionService, allowJoins, hibernateCompatible, subquery, entity);
+                }
                 position = appendCriteriaForOperator(whereClause, logicalName, name, position, " > ", hibernateCompatible);
                 parameters.add(conversionService.convert(eq.getValue(), propType));
                 return position;
@@ -513,6 +531,9 @@ public class JpaQueryBuilder {
                 final String name = eq.getProperty();
                 PersistentProperty prop = validateProperty(entity, name, Query.LessThanEquals.class);
                 Class propType = prop.getType();
+                if (eq.getValue() instanceof QueryableCriteria subquery) {
+                    return appendSubqueryComparison(q, whereClause, logicalName, name, " <= ", position, parameters, conversionService, allowJoins, hibernateCompatible, subquery, entity);
+                }
                 position = appendCriteriaForOperator(whereClause, logicalName, name, position, " <= ", hibernateCompatible);
                 parameters.add(conversionService.convert(eq.getValue(), propType));
                 return position;
@@ -525,6 +546,9 @@ public class JpaQueryBuilder {
                 final String name = eq.getProperty();
                 PersistentProperty prop = validateProperty(entity, name, Query.GreaterThanEquals.class);
                 Class propType = prop.getType();
+                if (eq.getValue() instanceof QueryableCriteria subquery) {
+                    return appendSubqueryComparison(q, whereClause, logicalName, name, " >= ", position, parameters, conversionService, allowJoins, hibernateCompatible, subquery, entity);
+                }
                 position = appendCriteriaForOperator(whereClause, logicalName, name, position, " >= ", hibernateCompatible);
                 parameters.add(conversionService.convert(eq.getValue(), propType));
                 return position;
@@ -565,6 +589,9 @@ public class JpaQueryBuilder {
                 final String name = eq.getProperty();
                 PersistentProperty prop = validateProperty(entity, name, Query.LessThan.class);
                 Class propType = prop.getType();
+                if (eq.getValue() instanceof QueryableCriteria subquery) {
+                    return appendSubqueryComparison(q, whereClause, logicalName, name, " < ", position, parameters, conversionService, allowJoins, hibernateCompatible, subquery, entity);
+                }
                 position = appendCriteriaForOperator(whereClause, logicalName, name, position, " < ", hibernateCompatible);
                 parameters.add(conversionService.convert(eq.getValue(), propType));
                 return position;
@@ -597,6 +624,42 @@ public class JpaQueryBuilder {
                     .append(++position)
                     .append(")");
                 parameters.add(conversionService.convert(eq.getValue(), propType));
+                return position;
+            }
+        });
+
+        queryHandlers.put(FunctionCallingCriterion.class, new QueryHandler() {
+            public int handle(PersistentEntity entity, Query.Criterion criterion, StringBuilder q, StringBuilder whereClause, String logicalName, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible) {
+                FunctionCallingCriterion functionCriterion = (FunctionCallingCriterion) criterion;
+                String name = functionCriterion.getProperty();
+                validateProperty(entity, name, FunctionCallingCriterion.class);
+                if (functionCriterion.isOnValue()) {
+                    throw new InvalidDataAccessResourceUsageException("A function on the value of a comparison is not supported: " + functionCriterion.getFunctionName());
+                }
+                Query.PropertyCriterion wrapped = functionCriterion.getPropertyCriterion();
+                whereClause.append(functionCriterion.getFunctionName())
+                           .append(OPEN_BRACKET)
+                           .append(resolvePropertyPath(logicalName, name))
+                           .append(CLOSE_BRACKET);
+                if (wrapped instanceof Query.In in) {
+                    whereClause.append(" IN (");
+                    for (Iterator i = in.getValues().iterator(); i.hasNext();) {
+                        whereClause.append(PARAMETER_PREFIX).append(++position);
+                        if (i.hasNext()) {
+                            whereClause.append(COMMA);
+                        }
+                        parameters.add(i.next());
+                    }
+                    whereClause.append(CLOSE_BRACKET);
+                }
+                else {
+                    String operator = functionOperator(wrapped);
+                    if (operator == null) {
+                        throw new InvalidDataAccessResourceUsageException("Unsupported criterion in a function call: " + wrapped.getClass().getSimpleName());
+                    }
+                    whereClause.append(operator).append(PARAMETER_PREFIX).append(++position);
+                    parameters.add(wrapped.getValue());
+                }
                 return position;
             }
         });
@@ -994,6 +1057,34 @@ public class JpaQueryBuilder {
                     criterionType.getSimpleName() + "] criterion on property path: " + name);
         }
         return last;
+    }
+
+    private static String functionOperator(Query.PropertyCriterion wrapped) {
+        if (wrapped instanceof Query.Equals) {
+            return " = ";
+        }
+        if (wrapped instanceof Query.NotEquals) {
+            return " != ";
+        }
+        if (wrapped instanceof Query.GreaterThan) {
+            return " > ";
+        }
+        if (wrapped instanceof Query.GreaterThanEquals) {
+            return " >= ";
+        }
+        if (wrapped instanceof Query.LessThan) {
+            return " < ";
+        }
+        if (wrapped instanceof Query.LessThanEquals) {
+            return " <= ";
+        }
+        if (wrapped instanceof Query.ILike) {
+            return " ilike ";
+        }
+        if (wrapped instanceof Query.Like) {
+            return " like ";
+        }
+        return null;
     }
 
     private static interface QueryHandler {
