@@ -454,38 +454,38 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         WriteOperationParent.where {}.list()*.name.unique() == ['one-child']
     }
 
-    void "test a bulk write with a created alias is rejected loudly"() {
+    void "test a bulk write resolves a created alias to the association path"() {
         given:
         def (parentAId, parentBId) = seedParentsAndChildren()
 
         when: 'the alias is declared with createAlias and the criterion uses the alias'
-        WriteOperationChild.where {
+        Number deleted = WriteOperationChild.where {
             createAlias('parent', 'p')
             eq('p.id', parentAId)
         }.deleteAll()
+        manager.session.clear()
 
-        then: 'the mutation path does not resolve aliases yet, and says so'
-        InvalidDataAccessResourceUsageException e = thrown()
-        e.message.contains('property path: p.id')
-        WriteOperationChild.count() == 2
+        then: 'the alias resolves to the association path and no join is needed'
+        deleted == 1
+        WriteOperationChild.where {}.list()*.name.sort() == ['child-b']
     }
 
-    void "test a bulk write subquery with the alias placeholder is rejected loudly"() {
+    void "test a bulk write subquery resolves the alias placeholder"() {
         given:
         def (parentAId, parentBId) = seedParentsAndChildren()
 
         when:
-        WriteOperationParent.where {
+        Number updated = WriteOperationParent.where {
             exists(WriteOperationChild.where {
                 eqProperty('parent.id', '{alias}.id')
                 eq('name', 'child-a')
             })
         }.updateAll([name: 'matched'])
+        manager.session.clear()
 
-        then: 'the mutation path does not resolve the correlation placeholder yet, and says so'
-        InvalidDataAccessResourceUsageException e = thrown()
-        e.message.contains('property path: {alias}.id')
-        WriteOperationParent.where {}.list()*.name.sort() == ['p-a', 'p-b']
+        then: 'the correlated exists selects the parent of child-a'
+        updated == 1
+        WriteOperationParent.where {}.list()*.name.sort() == ['matched', 'p-b']
     }
 
     private static Closure associationIdCriteria(String operator, Long parentAId, Long parentBId) {
