@@ -37,7 +37,7 @@ import org.springframework.dao.InvalidDataAccessResourceUsageException
 class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
 
     def setupSpec() {
-        manager.registerDomainClasses(WriteOperationEntity, WriteOperationParent, WriteOperationChild)
+        manager.registerDomainClasses(WriteOperationEntity, WriteOperationParent, WriteOperationChild, VersionedWriteEntity)
     }
 
     private void seed() {
@@ -633,6 +633,19 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         remainingNames() == ['b', 'c', 'd', 'e']
     }
 
+    void "test a bulk write with a null member in the in list"() {
+        given:
+        seed()
+
+        when: 'the null member matches no row, like SQL'
+        Number deleted = WriteOperationEntity.where { inList('name', ['a', null]) }.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 1
+        remainingNames() == ['b', 'c', 'd', 'e']
+    }
+
     void "test a bulk write filters by an enum property"() {
         given:
         seed()
@@ -821,6 +834,20 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         remainingNames() == []
     }
 
+    void "test a bulk update keeps the version of the row"() {
+        given:
+        new VersionedWriteEntity(name: 'versioned').save(flush: true)
+        Long versionBefore = VersionedWriteEntity.where { eq('name', 'versioned') }.get().version
+
+        when:
+        Number updated = VersionedWriteEntity.where { eq('name', 'versioned') }.updateAll([name: 'renamed'])
+        manager.session.clear()
+
+        then: 'a bulk update does not increment the version, like Hibernate without the versioned keyword'
+        updated == 1
+        VersionedWriteEntity.where { eq('name', 'renamed') }.get().version == versionBefore
+    }
+
     void "test a bulk write does not mutate the criteria"() {
         given:
         seed()
@@ -897,4 +924,11 @@ class WriteOperationChild implements HibernateEntity<WriteOperationChild> {
     String name
 
     static belongsTo = [parent: WriteOperationParent]
+}
+
+@Entity
+class VersionedWriteEntity implements HibernateEntity<VersionedWriteEntity> {
+
+    String name
+    Long version
 }
