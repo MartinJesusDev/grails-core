@@ -51,7 +51,7 @@ class SubqueryAliasSpec extends Specification {
             def t = Team
             name == "First Team"
             exists(Club.where {
-                id == t.club
+                id == t.club.id
             }.property('name'))
 
         }.find()
