@@ -94,7 +94,7 @@ List results = Book.executeQuery(
 
 === Query Settings
 
-`find`, `findAll`, and `executeQuery` overloads accept a settings map as the last argument. Use it for pagination and Hibernate query settings such as `cache`, `readOnly`, `fetchSize`, `timeout`, `flushMode`, and `lock`:
+`find`, `findAll`, and `executeQuery` overloads accept a settings map as the last argument. Use it for pagination and Hibernate query settings such as `cache`, `readOnly`, `fetchSize`, `timeout`, `flushMode`, and `lock`. The `list` and `find` methods of a detached criteria and the criteria builder accept the same settings, whether they are passed in the map or set on the criteria:
 
 [source,groovy]
 ----
