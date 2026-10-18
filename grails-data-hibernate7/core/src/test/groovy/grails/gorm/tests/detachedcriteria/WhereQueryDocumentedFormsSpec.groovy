@@ -329,6 +329,9 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
         manager.session.clear()
         def closureRows = DocFormEntity.where {}.list { readOnly(true) }
         def closureReadOnly = closureRows.every { session.isReadOnly(it) }
+        manager.session.clear()
+        def mapRows = DocFormEntity.where {}.list(readOnly: true)
+        def mapReadOnly = mapRows.every { session.isReadOnly(it) }
 
         then:
         page*.name == ['a', 'b']
@@ -336,6 +339,8 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
         criteriaReadOnly
         closureRows*.name.sort() == ['a', 'b', 'c', 'd']
         closureReadOnly
+        mapRows*.name.sort() == ['a', 'b', 'c', 'd']
+        mapReadOnly
     }
 
     void "the documented property comparisons execute"() {
