@@ -22,6 +22,10 @@ import jakarta.annotation.Nonnull;
 
 import org.hibernate.boot.spi.InFlightMetadataCollector;
 import org.hibernate.boot.spi.MetadataBuildingContext;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.hibernate.engine.spi.FilterDefinition;
 import org.hibernate.mapping.RootClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,11 +77,50 @@ public class RootPersistentClassCommonValuesBinder {
         }
     }
 
+    /**
+     * The filters an entity declares with the Hibernate annotations: the definition registers the
+     * condition the session enables by name and the filter applies it to the entity, which is what
+     * the annotation binder of Hibernate does. A definition with parameters needs the parameter
+     * types resolved against the type system, which this binder does not do yet, so it fails
+     * instead of registering a filter the session cannot enable.
+     */
+    private void applyFilters(HibernatePersistentEntity hibernatePersistentEntity, RootClass root) {
+        Class<?> javaClass = hibernatePersistentEntity.getJavaClass();
+        for (org.hibernate.annotations.FilterDef definition : javaClass.getAnnotationsByType(org.hibernate.annotations.FilterDef.class)) {
+            if (definition.parameters().length > 0) {
+                throw new IllegalArgumentException("The filter definition [" + definition.name() + "] of [" + javaClass.getName()
+                        + "] declares parameters, which the GORM binder does not support yet");
+            }
+            if (!mappings.getFilterDefinitions().containsKey(definition.name())) {
+                mappings.addFilterDefinition(new FilterDefinition(definition.name(), definition.defaultCondition(), Map.of()));
+            }
+        }
+        for (org.hibernate.annotations.Filter filter : javaClass.getAnnotationsByType(org.hibernate.annotations.Filter.class)) {
+            Map<String, String> aliasTableMap = new HashMap<>();
+            Map<String, String> aliasEntityMap = new HashMap<>();
+            for (org.hibernate.annotations.SqlFragmentAlias alias : filter.aliases()) {
+                if (!alias.table().isEmpty()) {
+                    aliasTableMap.put(alias.table(), alias.alias());
+                }
+                if (alias.entity() != void.class) {
+                    aliasEntityMap.put(alias.entity().getName(), alias.alias());
+                }
+            }
+            String condition = filter.condition();
+            if (condition.isEmpty()) {
+                FilterDefinition definition = mappings.getFilterDefinition(filter.name());
+                condition = definition != null ? definition.getDefaultFilterCondition() : "";
+            }
+            root.addFilter(filter.name(), condition, filter.deduceAliasInjectionPoints(), aliasTableMap, aliasEntityMap);
+        }
+    }
+
     public RootClass bindRoot(@Nonnull HibernatePersistentEntity hibernatePersistentEntity) {
 
         RootClass root = new RootClass(this.metadataBuildingContext);
         classBinder.bindClass(hibernatePersistentEntity, root);
         applySqlRestriction(hibernatePersistentEntity, root);
+        applyFilters(hibernatePersistentEntity, root);
 
         // get the schema and catalog names from the configuration
         Mapping gormMapping = hibernatePersistentEntity.getHibernateMappedForm();
