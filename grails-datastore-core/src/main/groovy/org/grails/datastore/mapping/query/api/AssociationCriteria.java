@@ -35,4 +35,14 @@ public interface AssociationCriteria {
     Association getAssociation();
 
     List<Query.Criterion> getCriteria();
+
+    /**
+     * @return the association path this criteria applies to
+     */
+    String getAssociationPath();
+
+    /**
+     * @return the alias declared for this association criteria, or null
+     */
+    String getAlias();
 }
