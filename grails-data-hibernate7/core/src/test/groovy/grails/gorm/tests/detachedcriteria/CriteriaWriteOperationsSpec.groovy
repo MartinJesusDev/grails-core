@@ -41,11 +41,11 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
     }
 
     private void seed() {
-        new WriteOperationEntity(name: 'a', amount: 1, active: true).save(flush: true)
-        new WriteOperationEntity(name: 'b', amount: 2, active: true).save(flush: true)
-        new WriteOperationEntity(name: 'c', amount: 3, active: false).save(flush: true)
+        new WriteOperationEntity(name: 'a', amount: 1, active: true, status: WriteStatus.ACTIVE).save(flush: true)
+        new WriteOperationEntity(name: 'b', amount: 2, active: true, status: WriteStatus.ACTIVE).save(flush: true)
+        new WriteOperationEntity(name: 'c', amount: 3, active: false, status: WriteStatus.INACTIVE).save(flush: true)
         new WriteOperationEntity(name: 'd', amount: null, active: false).save(flush: true)
-        new WriteOperationEntity(name: 'e', amount: 2, active: true).save(flush: true)
+        new WriteOperationEntity(name: 'e', amount: 2, active: true, status: WriteStatus.ACTIVE).save(flush: true)
     }
 
     private static DetachedCriteria<WriteOperationEntity> valuesOf(String... names) {
@@ -633,6 +633,117 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         remainingNames() == ['b', 'c', 'd', 'e']
     }
 
+    void "test a bulk write filters by an enum property"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { eq('status', WriteStatus.ACTIVE) }.deleteAll()
+        manager.session.clear()
+
+        then: 'the null status row is not selected'
+        deleted == 3
+        remainingNames() == ['c', 'd']
+    }
+
+    void "test updateAll with a null value and an unknown property"() {
+        given:
+        seed()
+
+        when: 'the set value is null'
+        Number updated = WriteOperationEntity.where { eq('name', 'a') }.updateAll([name: null])
+        manager.session.clear()
+
+        then:
+        updated == 1
+        WriteOperationEntity.where { isNull('name') }.count() == 1
+
+        when: 'the property does not exist'
+        WriteOperationEntity.where { eq('name', 'b') }.updateAll([noSuchProperty: 1])
+
+        then:
+        InvalidDataAccessResourceUsageException e = thrown()
+        e.message.contains('noSuchProperty')
+    }
+
+    void "test a bulk write with a negated association path"() {
+        given:
+        def (parentAId, parentBId) = seedParentsAndChildren()
+
+        when:
+        Number deleted = WriteOperationChild.where { not { eq('parent.id', parentAId) } }.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 1
+        WriteOperationChild.where {}.list()*.name == ['child-a']
+    }
+
+    void "test a bulk write with a lazy in subquery"() {
+        given:
+        def (parentAId, parentBId) = seedParentsAndChildren()
+
+        when:
+        Number updated = WriteOperationParent.where {
+            inList('id', WriteOperationChild.whereLazy {
+                projections { property('parent.id') }
+                eq('name', 'child-a')
+            })
+        }.updateAll([name: 'matched'])
+        manager.session.clear()
+
+        then: 'the deferred subquery keeps its restriction'
+        updated == 1
+        WriteOperationParent.where {}.list()*.name.sort() == ['matched', 'p-b']
+    }
+
+    void "test a bulk write with a lazy exists subquery"() {
+        given:
+        def (parentAId, parentBId) = seedParentsAndChildren()
+
+        when:
+        Number updated = WriteOperationParent.where {
+            exists(WriteOperationChild.whereLazy {
+                eqProperty('parent.id', '{alias}.id')
+                eq('name', 'child-a')
+            })
+        }.updateAll([name: 'matched'])
+        manager.session.clear()
+
+        then: 'the deferred subquery keeps its restriction'
+        updated == 1
+        WriteOperationParent.where {}.list()*.name.sort() == ['matched', 'p-b']
+    }
+
+    void "test a bulk write with a subquery that has no criteria"() {
+        given:
+        def (parentAId, parentBId) = seedParentsAndChildren()
+
+        when: 'the subquery has no restriction, so it selects every parent'
+        Number deleted = WriteOperationChild.where { inList('parent', WriteOperationParent.where {}) }.deleteAll()
+        manager.session.clear()
+
+        then: 'the subquery renders without a where clause'
+        deleted == 2
+        WriteOperationChild.where {}.list().isEmpty()
+    }
+
+    void "test a bulk write does not mutate the criteria"() {
+        given:
+        seed()
+        def criteria = WriteOperationEntity.where { eq('name', 'a') }
+
+        when:
+        Number deleted = criteria.deleteAll()
+        manager.session.clear()
+
+        then: 'the criteria keeps its structure and can be used again'
+        deleted == 1
+        criteria.projections.isEmpty()
+        criteria.criteria.size() == 1
+        criteria.list().isEmpty()
+    }
+
     private static Closure associationIdCriteria(String operator, Long parentAId, Long parentBId) {
         switch (operator) {
             case 'in':
@@ -671,6 +782,11 @@ class WriteOperationEntity implements HibernateEntity<WriteOperationEntity> {
     String name
     Integer amount
     Boolean active
+    WriteStatus status
+}
+
+enum WriteStatus {
+    ACTIVE, INACTIVE
 }
 
 @Entity
