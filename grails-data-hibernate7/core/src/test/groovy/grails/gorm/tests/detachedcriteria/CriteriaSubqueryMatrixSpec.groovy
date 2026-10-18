@@ -181,6 +181,48 @@ class CriteriaSubqueryMatrixSpec extends HibernateGormDatastoreSpec {
         page.totalCount == 3
     }
 
+    void "test the other read terminals work with a subquery criterion"() {
+        given:
+        seedValues()
+
+        when:
+        def matching = SubqueryMatrixEntity.where { gtSome('amount', valuesOf('a', 'd')) }
+
+        then:
+        matching.size() == 3
+        matching.asBoolean()
+        matching.iterator().collect { it.name }.sort() == ['b', 'c', 'e']
+
+        when: 'no row matches'
+        def none = SubqueryMatrixEntity.where { gtSome('amount', valuesOf('no-such-name')) }
+
+        then:
+        !none.asBoolean()
+        none.count() == 0
+    }
+
+    void "test count and pagination with a correlated subquery"() {
+        given:
+        seedValues()
+
+        when:
+        def correlated = SubqueryMatrixEntity.where {
+            exists(SubqueryMatrixEntity.where {
+                eqProperty('name', '{alias}.name')
+                eq('amount', 2)
+            })
+        }
+
+        then: 'only the rows named like a row with amount 2'
+        correlated.count() == 2
+        correlated.list()*.name.sort() == ['b', 'e']
+
+        and: 'the page is limited while the total count sees every match'
+        def page = correlated.list(max: 1)
+        page.size() == 1
+        page.totalCount == 2
+    }
+
     private static DetachedCriteria<SubqueryMatrixEntity> namesWithAmount(int amount) {
         SubqueryMatrixEntity.where {
             projections { property('name') }
