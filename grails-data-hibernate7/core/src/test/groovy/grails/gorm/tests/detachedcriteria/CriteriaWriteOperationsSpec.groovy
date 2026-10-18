@@ -728,6 +728,34 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         WriteOperationChild.where {}.list().isEmpty()
     }
 
+    void "test a bulk write compares a property with a subquery"() {
+        given:
+        seed()
+
+        when: 'rows above the average amount'
+        Number deleted = WriteOperationEntity.where {
+            gt('amount', WriteOperationEntity.where { projections { avg('amount') } })
+        }.deleteAll()
+        manager.session.clear()
+
+        then: 'the average of the amounts is 2, so only the row above it is deleted'
+        deleted == 1
+        remainingNames() == ['a', 'b', 'd', 'e']
+    }
+
+    void "test a bulk write filters with a function call"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { upper(name) == 'A' }.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 1
+        remainingNames() == ['b', 'c', 'd', 'e']
+    }
+
     void "test a bulk write does not mutate the criteria"() {
         given:
         seed()
