@@ -513,6 +513,32 @@ class HibernateCriteriaBuilderSpec extends HibernateGormDatastoreSpec {
         results[0].firstName == "Fred"
     }
 
+    void "cache, readOnly and lock do not change the matches"() {
+        when:
+        def results = c.list {
+            cache(true)
+            readOnly(true)
+            lock(true)
+            eq("lastName", "Flintstone")
+            order("firstName", "asc")
+        }
+
+        then:
+        results*.firstName == ["Fred", "Pebbles", "Wilma"]
+    }
+
+    void "fetchMode JOIN eagerly initializes the association"() {
+        when:
+        def results = c.list {
+            fetchMode("transactions", org.hibernate.FetchMode.JOIN)
+            eq("firstName", "Fred")
+        }
+
+        then:
+        results.size() == 1
+        org.hibernate.Hibernate.isInitialized(results[0].transactions)
+    }
+
     void "scroll returns a ScrollableResults cursor over matching rows"() {
         when:
         def results = c.scroll {
