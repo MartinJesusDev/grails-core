@@ -539,6 +539,18 @@ class HibernateCriteriaBuilderSpec extends HibernateGormDatastoreSpec {
         org.hibernate.Hibernate.isInitialized(results[0].transactions)
     }
 
+    void "fetchMode JOIN with pagination still returns the page"() {
+        when:
+        def results = c.list(max: 2) {
+            fetchMode("transactions", org.hibernate.FetchMode.JOIN)
+            order("firstName", "asc")
+        }
+
+        then: 'Hibernate applies the pagination in memory when a collection is fetched, and the page is still correct'
+        results.size() == 2
+        results*.firstName == ["Bam-Bam", "Barney"]
+    }
+
     void "scroll returns a ScrollableResults cursor over matching rows"() {
         when:
         def results = c.scroll {
