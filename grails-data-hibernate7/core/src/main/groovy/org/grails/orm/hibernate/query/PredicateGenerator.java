@@ -439,7 +439,10 @@ public class PredicateGenerator {
             }
 
             Collection<?> collection = value instanceof Collection ? (Collection<?>) value : Collections.singletonList(value);
+            // A null member of the list matches no row in SQL, so it takes no part in the comparison
+            // instead of failing the whole query.
             List<Object> converted = collection.stream()
+                .filter(Objects::nonNull)
                 .map(v -> convertValue(entity, propertyName, v, propertyPath))
                 .collect(Collectors.toList());
 
