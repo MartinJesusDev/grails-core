@@ -915,6 +915,24 @@ abstract class AbstractDetachedCriteria<T> implements Criteria, Cloneable {
     }
 
     /**
+     * The default maximum number of rows this criteria lists, or null when it lists every match.
+     *
+     * @return The default max
+     */
+    Integer getDefaultMax() {
+        defaultMax
+    }
+
+    /**
+     * The default offset this criteria lists from, or null when it lists from the first match.
+     *
+     * @return The default offset
+     */
+    Integer getDefaultOffset() {
+        defaultOffset
+    }
+
+    /**
      * Adds a sort order to this criteria instance
      *
      * @param property The property to sort by

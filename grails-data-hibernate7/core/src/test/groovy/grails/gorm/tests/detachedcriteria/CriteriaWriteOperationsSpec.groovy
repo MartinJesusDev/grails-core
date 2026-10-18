@@ -848,6 +848,32 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         VersionedWriteEntity.where { eq('name', 'renamed') }.get().version == versionBefore
     }
 
+    void "test a bulk write rejects the pagination it cannot honour"() {
+        given:
+        seed()
+
+        when: 'a delete that asks for a limit'
+        WriteOperationEntity.where {}.max(2).deleteAll()
+
+        then: 'a bulk statement has no limit clause, so it fails instead of deleting every row'
+        InvalidDataAccessResourceUsageException e = thrown()
+        e.message.contains('maxResults')
+
+        when: 'an update that asks for an offset'
+        WriteOperationEntity.where {}.offset(1).updateAll([name: 'renamed'])
+
+        then:
+        InvalidDataAccessResourceUsageException e2 = thrown()
+        e2.message.contains('offset')
+
+        when: 'the same criteria without pagination still deletes every row'
+        Number deleted = WriteOperationEntity.where {}.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 5
+    }
+
     void "test a bulk write does not mutate the criteria"() {
         given:
         seed()
