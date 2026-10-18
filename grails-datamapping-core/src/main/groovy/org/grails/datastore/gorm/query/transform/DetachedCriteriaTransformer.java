@@ -1278,7 +1278,11 @@ public class DetachedCriteriaTransformer extends ClassCodeVisitorSupport {
 
                                 addProjectionToCurrentBody(currentBody, aggregateFunctionName, aggregatePropertyName, variableScope);
 
-                                rightExpression = closureAndArguments.getClosureExpression();
+                                // The subquery is built explicitly, like the `of` form does: the closure passed to
+                                // build() takes the criteria as its delegate, while the same closure handed to the
+                                // criterion as a value resolves the generated calls against the delegate of the
+                                // enclosing closure, which puts the aggregate on the outer query.
+                                rightExpression = new MethodCallExpression(new ConstructorCallExpression(getParameterizedDetachedCriteriaClassNode(null), new ArgumentListExpression(new ClassExpression(this.currentClassNode))), "build", new ArgumentListExpression(closureAndArguments.getClosureExpression()));
 
                                 if ("property".equals(aggregateFunctionName) && METHOD_TO_SUBQUERY_MAP.containsKey(methodToCall)) {
                                     methodToCall = methodToCall + "All";
