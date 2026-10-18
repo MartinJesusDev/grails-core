@@ -488,6 +488,151 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         WriteOperationParent.where {}.list()*.name.sort() == ['matched', 'p-b']
     }
 
+    void "test deleteAll with all and some subquery comparisons"() {
+        given:
+        seed()
+
+        when: 'rows whose amount is greater than every amount of a'
+        Number allDeleted = WriteOperationEntity.where { gtAll('amount', valuesOf('a')) }.deleteAll()
+        manager.session.clear()
+
+        then:
+        allDeleted == 3
+        remainingNames() == ['a', 'd']
+
+        when: 'rows whose amount is less than or equal to some amount of a'
+        Number someDeleted = WriteOperationEntity.where { leSome('amount', valuesOf('a')) }.deleteAll()
+        manager.session.clear()
+
+        then:
+        someDeleted == 1
+        remainingNames() == ['d']
+
+        when: 'the subquery matches nothing, so = ALL is vacuously true'
+        Number vacuousDeleted = WriteOperationEntity.where { eqAll('amount', valuesOf('no-such-name')) }.deleteAll()
+        manager.session.clear()
+
+        then:
+        vacuousDeleted == 1
+        remainingNames() == []
+    }
+
+    void "test updateAll with isEmpty over a to-many association"() {
+        given:
+        def parentWithChild = new WriteOperationParent(name: 'p-a')
+                .addToChildren(name: 'child-a')
+                .save(flush: true)
+        new WriteOperationParent(name: 'p-empty').save(flush: true)
+
+        when:
+        Number updated = WriteOperationParent.where { isEmpty('children') }.updateAll([name: 'no-children'])
+        manager.session.clear()
+
+        then:
+        updated == 1
+        WriteOperationParent.where {}.list()*.name.sort() == ['no-children', 'p-a']
+    }
+
+    void "test a bulk write resolves the alias placeholder inside an in subquery"() {
+        given:
+        def (parentAId, parentBId) = seedParentsAndChildren()
+
+        when:
+        Number updated = WriteOperationParent.where {
+            inList('id', WriteOperationChild.where {
+                projections { property('parent.id') }
+                eqProperty('parent.id', '{alias}.id')
+                eq('name', 'child-a')
+            })
+        }.updateAll([name: 'matched'])
+        manager.session.clear()
+
+        then:
+        updated == 1
+        WriteOperationParent.where {}.list()*.name.sort() == ['matched', 'p-b']
+    }
+
+    void "test a bulk write rejects the alias placeholder outside a subquery"() {
+        given:
+        seed()
+
+        when: 'the placeholder refers to no enclosing query'
+        WriteOperationEntity.where { eqProperty('name', '{alias}.name') }.deleteAll()
+
+        then:
+        InvalidDataAccessResourceUsageException e = thrown()
+        e.message.contains('outside of a subquery')
+        WriteOperationEntity.count() == 5
+    }
+
+    void "test a bulk write rejects rlike and sqlRestriction with a clear message"() {
+        given:
+        seed()
+
+        when:
+        WriteOperationEntity.where { rlike('name', 'a.*') }.deleteAll()
+
+        then:
+        InvalidDataAccessResourceUsageException e = thrown()
+        e.message.contains('RLike')
+        WriteOperationEntity.count() == 5
+
+        when:
+        WriteOperationEntity.where { sqlRestriction('length(name) > 0') }.deleteAll()
+
+        then:
+        thrown(InvalidDataAccessResourceUsageException)
+        WriteOperationEntity.count() == 5
+    }
+
+    void "test a bulk write ignores the sort of the criteria"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { inList('amount', valuesOf('a', 'b')) }.sort('name', 'desc').deleteAll()
+        manager.session.clear()
+
+        then: 'the order is not part of a delete'
+        deleted == 3
+        remainingNames() == ['c', 'd']
+    }
+
+    void "test a bulk write combines an association alias with the alias placeholder"() {
+        given:
+        def (parentAId, parentBId) = seedParentsAndChildren()
+
+        when:
+        Number updated = WriteOperationParent.where {
+            exists(WriteOperationChild.where {
+                createAlias('parent', 'p')
+                eqProperty('p.id', '{alias}.id')
+                eq('name', 'child-a')
+            })
+        }.updateAll([name: 'matched'])
+        manager.session.clear()
+
+        then: 'the alias resolves inside the subquery and the placeholder to the outer query'
+        updated == 1
+        WriteOperationParent.where {}.list()*.name.sort() == ['matched', 'p-b']
+    }
+
+    void "test a bulk write with duplicate in values and a boolean criterion"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where {
+            inList('name', ['a', 'a'])
+            eq('active', true)
+        }.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 1
+        remainingNames() == ['b', 'c', 'd', 'e']
+    }
+
     private static Closure associationIdCriteria(String operator, Long parentAId, Long parentBId) {
         switch (operator) {
             case 'in':
