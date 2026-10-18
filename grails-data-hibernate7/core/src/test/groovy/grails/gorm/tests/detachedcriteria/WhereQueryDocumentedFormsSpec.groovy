@@ -333,6 +333,25 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
         notEqual == ['a', 'b', 'c']
     }
 
+    void "between and in handle dates, empty lists and null members"() {
+        given:
+        seedEntities()
+
+        when:
+        def inRange = DocFormEntity.where { between('created', date(2011, 1, 1), date(2012, 12, 31)) }.list()*.name.sort()
+        def emptyIn = DocFormEntity.where { name in [] }.list()
+        def nullMemberIn = DocFormEntity.where { name in ['a', null] }.list()*.name
+        def nullDates = DocFormEntity.where { isNull('created') }.list()*.name
+        def notNullDates = DocFormEntity.where { isNotNull('created') }.list()*.name.sort()
+
+        then:
+        inRange == ['a', 'b']
+        emptyIn.isEmpty()
+        nullMemberIn == ['a']
+        nullDates == ['d']
+        notNullDates == ['a', 'b', 'c']
+    }
+
     void "the alias exists form keeps the comparison criterion in the subquery tree"() {
         when:
         def query = DocFormParent.where {
