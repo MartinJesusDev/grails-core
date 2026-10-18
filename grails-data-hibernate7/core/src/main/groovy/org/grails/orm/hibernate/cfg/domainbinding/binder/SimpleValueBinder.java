@@ -77,6 +77,23 @@ public class SimpleValueBinder {
         return basicValue;
     }
 
+
+    /**
+     * The formula a property declares with the Hibernate annotation, so the annotation and the
+     * mapping DSL both configure a derived property.
+     */
+    private static String annotatedFormula(HibernatePersistentProperty property) {
+        var reader = property.getReader();
+        if (reader == null) {
+            return null;
+        }
+        org.hibernate.annotations.Formula annotation = reader.getter() != null ? reader.getter().getAnnotation(org.hibernate.annotations.Formula.class) : null;
+        if (annotation == null && reader.field() != null) {
+            annotation = reader.field().getAnnotation(org.hibernate.annotations.Formula.class);
+        }
+        return annotation != null ? annotation.value() : null;
+    }
+
     public SimpleValue bindSimpleValue(
             @jakarta.annotation.Nonnull HibernatePersistentProperty property,
             HibernatePersistentProperty parentProperty,
@@ -88,9 +105,10 @@ public class SimpleValueBinder {
         simpleValue.setTypeName(typeName);
         simpleValue.setTypeParameters(property.getTypeParameters(simpleValue));
 
-        if (propertyConfig.isDerived() && !(property instanceof TenantId)) {
+        String formulaText = propertyConfig.isDerived() ? propertyConfig.getFormula() : annotatedFormula(property);
+        if (formulaText != null && !(property instanceof TenantId)) {
             Formula formula = new Formula();
-            formula.setFormula(propertyConfig.getFormula());
+            formula.setFormula(formulaText);
             simpleValue.addFormula(formula);
         } else {
             Table table = simpleValue.getTable();
