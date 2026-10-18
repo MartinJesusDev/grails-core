@@ -38,6 +38,8 @@ import org.hibernate.FlushMode;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.query.QueryFlushMode;
+import org.grails.datastore.mapping.query.api.QueryArgumentsAware;
+import org.grails.datastore.mapping.reflect.ClassUtils;
 import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 import org.hibernate.query.criteria.JpaCriteriaQuery;
 import org.hibernate.query.criteria.JpaSubQuery;
@@ -71,7 +73,7 @@ import org.grails.orm.hibernate.proxy.HibernateProxyHandler;
  * @since 1.0
  */
 @SuppressWarnings("rawtypes")
-public class HibernateQuery extends Query {
+public class HibernateQuery extends Query implements QueryArgumentsAware {
 
     protected static final String ALIAS = "_alias";
     private final Map<String, CriteriaAndAlias> createdAssociationPaths = new HashMap<>();
@@ -640,6 +642,39 @@ public class HibernateQuery extends Query {
     public Query readOnly(boolean readOnly) {
         this.readOnly = readOnly;
         return this;
+    }
+
+    /**
+     * Applies the Hibernate settings of a query arguments map, the same ones the HQL methods
+     * honour, so a criteria and an HQL query accept the same settings.
+     */
+    @Override
+    public void setArguments(Map arguments) {
+        if (arguments == null || arguments.isEmpty()) {
+            return;
+        }
+        if (arguments.containsKey(HibernateQueryArgument.READ_ONLY.value())) {
+            setReadOnly(ClassUtils.getBooleanFromMap(HibernateQueryArgument.READ_ONLY.value(), arguments));
+        }
+        if (arguments.containsKey(HibernateQueryArgument.CACHE.value())) {
+            cache(ClassUtils.getBooleanFromMap(HibernateQueryArgument.CACHE.value(), arguments));
+        }
+        if (arguments.containsKey(HibernateQueryArgument.FETCH_SIZE.value())) {
+            setFetchSize(toInteger(arguments.get(HibernateQueryArgument.FETCH_SIZE.value())));
+        }
+        if (arguments.containsKey(HibernateQueryArgument.TIMEOUT.value())) {
+            setTimeout(toInteger(arguments.get(HibernateQueryArgument.TIMEOUT.value())));
+        }
+    }
+
+    private static Integer toInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text) {
+            return Integer.valueOf(text.trim());
+        }
+        return null;
     }
 
     public DetachedCriteria<?> getHibernateCriteria() {
