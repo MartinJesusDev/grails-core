@@ -57,4 +57,10 @@ public interface QueryableCriteria<T> extends Criteria {
      */
     String getAlias();
 
+    /**
+     * Applies a deferred criteria definition, if any, so that {@link #getCriteria()} and
+     * {@link #getProjections()} can be read. Implementations without deferred criteria do nothing.
+     */
+    default void applyLazyCriteria() {
+    }
 }

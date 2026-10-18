@@ -85,6 +85,7 @@ public class JpaQueryBuilder {
     private boolean hibernateCompatible;
 
     public JpaQueryBuilder(QueryableCriteria criteria) {
+        criteria.applyLazyCriteria();
         this(criteria.getPersistentEntity(), criteria.getCriteria());
     }
 
@@ -808,6 +809,7 @@ public class JpaQueryBuilder {
      * for the ones declared inside it while its criteria are rendered.
      */
     protected int buildSubQuery(StringBuilder q, StringBuilder whereClause, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible, QueryableCriteria subquery, String outerLogicalName, PersistentEntity outerEntity) {
+        subquery.applyLazyCriteria();
         PersistentEntity associatedEntity = subquery.getPersistentEntity();
         String associatedEntityName = associatedEntity.getName();
         String associatedEntityLogicalName = associatedEntity.getDecapitalizedName() + position;
@@ -816,8 +818,7 @@ public class JpaQueryBuilder {
         whereClause.append(" FROM ")
                 .append(associatedEntityName)
                 .append(' ')
-                .append(associatedEntityLogicalName)
-                .append(" WHERE ");
+                .append(associatedEntityLogicalName);
 
         Map<String, String> previousAliases = aliases;
         String previousLogicalName = correlationLogicalName;
@@ -828,7 +829,11 @@ public class JpaQueryBuilder {
         try {
             List<Query.Criterion> criteria = subquery.getCriteria();
             collectAliases(criteria);
-            position = buildWhereClauseForCriterion(associatedEntity, new Query.Conjunction(criteria), q, whereClause, associatedEntityLogicalName, criteria, position, parameters, conversionService, allowJoins, hibernateCompatible);
+            StringBuilder subWhereClause = new StringBuilder();
+            position = buildWhereClauseForCriterion(associatedEntity, new Query.Conjunction(criteria), q, subWhereClause, associatedEntityLogicalName, criteria, position, parameters, conversionService, allowJoins, hibernateCompatible);
+            if (subWhereClause.length() > 0) {
+                whereClause.append(" WHERE ").append(subWhereClause);
+            }
         }
         finally {
             aliases = previousAliases;
