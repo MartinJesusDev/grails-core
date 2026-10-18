@@ -79,20 +79,35 @@ public class RootPersistentClassCommonValuesBinder {
 
     /**
      * The filters an entity declares with the Hibernate annotations: the definition registers the
-     * condition the session enables by name and the filter applies it to the entity, which is what
-     * the annotation binder of Hibernate does. A definition with parameters needs the parameter
-     * types resolved against the type system, which this binder does not do yet, so it fails
-     * instead of registering a filter the session cannot enable.
+     * condition the session enables by name, with the types of its parameters, and the filter
+     * applies it to the entity, which is what the annotation binder of Hibernate does.
      */
+
+    private Map<String, org.hibernate.metamodel.mapping.JdbcMapping> resolveFilterParameters(
+            org.hibernate.annotations.FilterDef definition, Class<?> javaClass) {
+        org.hibernate.annotations.ParamDef[] parameters = definition.parameters();
+        if (parameters.length == 0) {
+            return Map.of();
+        }
+        var registry = metadataBuildingContext.getBootstrapContext().getTypeConfiguration().getBasicTypeRegistry();
+        Map<String, org.hibernate.metamodel.mapping.JdbcMapping> parameterTypes = new HashMap<>();
+        for (org.hibernate.annotations.ParamDef parameter : parameters) {
+            var type = registry.getRegisteredType(parameter.type());
+            if (type == null) {
+                throw new IllegalArgumentException("Unknown type [" + parameter.type() + "] of the filter parameter ["
+                        + parameter.name() + "] of [" + javaClass.getName() + "]");
+            }
+            parameterTypes.put(parameter.name(), type);
+        }
+        return parameterTypes;
+    }
+
     private void applyFilters(HibernatePersistentEntity hibernatePersistentEntity, RootClass root) {
         Class<?> javaClass = hibernatePersistentEntity.getJavaClass();
         for (org.hibernate.annotations.FilterDef definition : javaClass.getAnnotationsByType(org.hibernate.annotations.FilterDef.class)) {
-            if (definition.parameters().length > 0) {
-                throw new IllegalArgumentException("The filter definition [" + definition.name() + "] of [" + javaClass.getName()
-                        + "] declares parameters, which the GORM binder does not support yet");
-            }
             if (!mappings.getFilterDefinitions().containsKey(definition.name())) {
-                mappings.addFilterDefinition(new FilterDefinition(definition.name(), definition.defaultCondition(), Map.of()));
+                mappings.addFilterDefinition(new FilterDefinition(definition.name(), definition.defaultCondition(),
+                        resolveFilterParameters(definition, javaClass)));
             }
         }
         for (org.hibernate.annotations.Filter filter : javaClass.getAnnotationsByType(org.hibernate.annotations.Filter.class)) {
