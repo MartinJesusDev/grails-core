@@ -1468,6 +1468,28 @@ Removing one element of a unidirectional `hasMany` set or bag, with `removeFrom*
 
 Under Hibernate 7, calling a collection criterion such as `isNotEmpty('pets')`, `isEmpty('pets')`, or `sizeEq('pets', n)` next to an association block for the same collection (`pets { ... }`) threw a `ClassCastException` because the path resolved to the join rather than the collection attribute (issue https://github.com/apache/grails-core/issues/16633[#16633]). Collection criteria now resolve to the collection property on the parent whether they appear before or after an association block of the same name.
 
+===== 26.14 Criteria and Query Behaviour
+
+The Hibernate 7 implementation translates the GORM criteria API to the JPA Criteria API, which is stricter than the Hibernate 5 implementation in a few places and honours the annotations the binder reads.
+
+*Mapping annotations.* The binder maps `@org.hibernate.annotations.Formula` on a property, and `@org.hibernate.annotations.SQLRestriction`, `@FilterDef` and `@Filter` on an entity, the same way the `mapping { }` DSL does. A filter definition that declares parameters registers them, so the session can enable the filter and set its parameters.
+
+*Comparing a property with an association.* A comparison between a basic property and an association (for example `id == team.club`) is rejected, because the right-hand side is an entity and not a value. Hibernate 5 resolved the association through its identifier; migrate to comparing the identifiers:
+
+[source,groovy]
+----
+Team.where {
+    def t = Team
+    exists(Club.where { id == t.club.id })
+}
+----
+
+*Batch operations.* A batch update or delete (`updateAll`, `deleteAll`) of a detached criteria rejects the pagination (`max`, `offset`) with an exception, because a bulk statement has no limit clause. Join queries and `sqlRestriction` are rejected as before.
+
+*Read-only and cache settings.* The `readOnly(true)` and `cache(true)` settings of a criteria apply to the query, whether they are set on the criteria, in the `list` closure, or in the arguments map of a `list` or `find` call.
+
+*Where query forms.* The functions (`upper`, `lower`, `trim`, `length`, `year`), the aggregate subqueries (`amount > avg(amount)`, `avg(amount).of { ... }`, `property(amount).of { ... }`) and the comparison of a property with a projection subquery the where query manual documents are supported, as they were in Hibernate 5.
+
 ==== 27. GORM Properties Are Nullable by Default
 
 Grails 8 changes the validation default so that an *unconstrained persistent (domain) property is nullable by default* rather than required.

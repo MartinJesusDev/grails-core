@@ -208,7 +208,7 @@ def criteria = new DetachedCriteria(Person).build {
 int total = criteria.updateAll(lastName:"Bloggs")
 ----
 
-NOTE: Note that one limitation with regards to batch operations is that join queries (queries that query associations) are not allowed within the `DetachedCriteria` instance. Neither is `sqlRestriction`: a batch operation on a detached criteria with a SQL restriction throws an exception.
+NOTE: Note that one limitation with regards to batch operations is that join queries (queries that query associations) are not allowed within the `DetachedCriteria` instance. Neither is `sqlRestriction`: a batch operation on a detached criteria with a SQL restriction throws an exception. The pagination of the criteria (`max` and `offset`) is not allowed either, because a bulk statement has no limit clause: a batch operation on a criteria with pagination throws an exception.
 
 To batch delete records you can use the `deleteAll` method:
 
