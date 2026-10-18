@@ -53,6 +53,7 @@ import org.grails.datastore.mapping.model.PersistentProperty;
 import org.grails.datastore.mapping.model.types.Association;
 import org.grails.datastore.mapping.query.Projections;
 import org.grails.datastore.mapping.query.Query;
+import org.grails.datastore.mapping.query.criteria.FunctionCallingCriterion;
 import org.grails.datastore.mapping.query.api.QueryableCriteria;
 import org.grails.orm.hibernate.cfg.domainbinding.hibernate.GrailsHibernatePersistentEntity;
 import org.grails.orm.hibernate.cfg.domainbinding.hibernate.HibernatePersistentProperty;
@@ -214,6 +215,8 @@ public class PredicateGenerator {
             return handlePropertyCriterion(criteriaQuery, root, fromsByProvider, entity, pc);
         } else if (criterion instanceof Query.PropertyComparisonCriterion c) {
             return handlePropertyComparisonCriterion(fromsByProvider, c);
+        } else if (criterion instanceof FunctionCallingCriterion c) {
+            return handleFunctionCallingCriterion(fromsByProvider, c);
         } else if (criterion instanceof Query.PropertyNameCriterion c) {
             return handlePropertyNameCriterion(fromsByProvider, c);
         } else if (criterion instanceof Query.Exists c) {
@@ -377,21 +380,33 @@ public class PredicateGenerator {
         } else if (pc instanceof Query.Like) {
             return criteriaBuilder.like((Expression<String>) propertyPath, (String) convertValue(entity, propertyName, pc.getValue(), propertyPath));
         } else if (pc instanceof Query.GreaterThan) {
+            if (pc.getValue() instanceof QueryableCriteria qc) {
+                return handleComparisonWithSubquery(criteriaQuery, pc, propertyPath, fromsByProvider, Comparison.GREATER);
+            }
             Object value = convertComparisonValue(entity, propertyName, pc.getValue(), fromsByProvider, propertyPath);
             return value instanceof Comparable<?> comparable ?
                 criteriaBuilder.greaterThan((Expression<? extends Comparable>) propertyPath, (Comparable) comparable) :
                 criteriaBuilder.greaterThan((Expression<? extends Comparable>) propertyPath, (Expression) asExpression(value, propertyPath, fromsByProvider));
         } else if (pc instanceof Query.GreaterThanEquals) {
+            if (pc.getValue() instanceof QueryableCriteria qc) {
+                return handleComparisonWithSubquery(criteriaQuery, pc, propertyPath, fromsByProvider, Comparison.GREATER_EQUALS);
+            }
             Object value = convertComparisonValue(entity, propertyName, pc.getValue(), fromsByProvider, propertyPath);
             return value instanceof Comparable<?> comparable ?
                 criteriaBuilder.greaterThanOrEqualTo((Expression<? extends Comparable>) propertyPath, (Comparable) comparable) :
                 criteriaBuilder.greaterThanOrEqualTo((Expression<? extends Comparable>) propertyPath, (Expression) asExpression(value, propertyPath, fromsByProvider));
         } else if (pc instanceof Query.LessThan) {
+            if (pc.getValue() instanceof QueryableCriteria qc) {
+                return handleComparisonWithSubquery(criteriaQuery, pc, propertyPath, fromsByProvider, Comparison.LESS);
+            }
             Object value = convertComparisonValue(entity, propertyName, pc.getValue(), fromsByProvider, propertyPath);
             return value instanceof Comparable<?> comparable ?
                 criteriaBuilder.lessThan((Expression<? extends Comparable>) propertyPath, (Comparable) comparable) :
                 criteriaBuilder.lessThan((Expression<? extends Comparable>) propertyPath, (Expression) asExpression(value, propertyPath, fromsByProvider));
         } else if (pc instanceof Query.LessThanEquals) {
+            if (pc.getValue() instanceof QueryableCriteria qc) {
+                return handleComparisonWithSubquery(criteriaQuery, pc, propertyPath, fromsByProvider, Comparison.LESS_EQUALS);
+            }
             Object value = convertComparisonValue(entity, propertyName, pc.getValue(), fromsByProvider, propertyPath);
             return value instanceof Comparable<?> comparable ?
                 criteriaBuilder.lessThanOrEqualTo((Expression<? extends Comparable>) propertyPath, (Comparable) comparable) :
@@ -529,8 +544,11 @@ public class PredicateGenerator {
         Expression<?> propertyPath = fromsByProvider.getFullyQualifiedExpression(c.getProperty());
         Expression<?> otherPropertyPath = fromsByProvider.getFullyQualifiedExpression(c.getOtherProperty());
 
-        if (propertyPath == null || otherPropertyPath == null) {
-            return null;
+        if (propertyPath == null) {
+            throw new ConfigurationException("Cannot resolve property [" + c.getProperty() + "] in a property comparison criterion");
+        }
+        if (otherPropertyPath == null) {
+            throw new ConfigurationException("Cannot resolve property [" + c.getOtherProperty() + "] in a property comparison criterion");
         }
 
         if (c instanceof Query.EqualsProperty) {
@@ -550,8 +568,120 @@ public class PredicateGenerator {
         throw new UnsupportedOperationException("Unsupported property comparison criterion: " + c.getClass().getName());
     }
 
+    /**
+     * Compares a property with a scalar subquery, for example {@code age > (select avg(age) ...)},
+     * the form the manual documents for gt with a projection subquery.
+     */
+    @SuppressWarnings("unchecked")
+    private Predicate handleComparisonWithSubquery(AbstractQuery<?> criteriaQuery, Query.PropertyCriterion pc, Expression<?> propertyPath, JpaQueryContext fromsByProvider, Comparison comparison) {
+        QueryableCriteria<?> qc = (QueryableCriteria<?>) pc.getValue();
+        materializeLazyCriteria(qc);
+        Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
+        Subquery<?> subquery = criteriaQuery.subquery(expectedType);
+
+        Query.ProjectionList projectionList = new Query.ProjectionList();
+        for (Object p : qc.getProjections()) {
+            projectionList.add((Query.Projection) p);
+        }
+        if (projectionList.isEmpty() && propertyPath != null) {
+            String propertyName = pc.getProperty();
+            if (propertyName.contains(grails.orm.HibernateCriteriaBuilder.ALIAS_SEPARATOR)) {
+                propertyName = propertyName.split(grails.orm.HibernateCriteriaBuilder.ALIAS_SEPARATOR)[1];
+            }
+            PersistentProperty prop = qc.getPersistentEntity().getPropertyByName(propertyName);
+            if (prop != null) {
+                projectionList.add(Projections.property(propertyName));
+            }
+        }
+
+        var creator = new JpaCriteriaQueryCreator(projectionList, criteriaBuilder, (GrailsHibernatePersistentEntity) qc.getPersistentEntity(), (DetachedCriteria) qc, conversionService);
+        creator.setParentContext(fromsByProvider);
+        creator.populateSubquery((JpaSubQuery) subquery);
+
+        return switch (comparison) {
+            case GREATER -> criteriaBuilder.greaterThan((Expression<? extends Comparable>) propertyPath, (Expression) subquery);
+            case GREATER_EQUALS -> criteriaBuilder.greaterThanOrEqualTo((Expression<? extends Comparable>) propertyPath, (Expression) subquery);
+            case LESS -> criteriaBuilder.lessThan((Expression<? extends Comparable>) propertyPath, (Expression) subquery);
+            case LESS_EQUALS -> criteriaBuilder.lessThanOrEqualTo((Expression<? extends Comparable>) propertyPath, (Expression) subquery);
+        };
+    }
+
+    private enum Comparison {
+        GREATER, GREATER_EQUALS, LESS, LESS_EQUALS
+    }
+
+    /**
+     * Translates a function call around a property, the where-query form {@code upper(name) == 'A'}:
+     * the function wraps the property expression and the wrapped criterion supplies the operator and
+     * the value. The functions the transformer supports are lower, upper, trim, length and the date
+     * parts second, hour, minute, day, month and year.
+     */
+    @SuppressWarnings("unchecked")
+    private Predicate handleFunctionCallingCriterion(JpaQueryContext fromsByProvider, FunctionCallingCriterion criterion) {
+        String functionName = criterion.getFunctionName();
+        if (criterion.isOnValue()) {
+            throw new UnsupportedOperationException("A function on the value of a comparison is not supported: " + functionName);
+        }
+        Expression<?> propertyPath = fromsByProvider.getFullyQualifiedExpression(criterion.getProperty());
+        if (propertyPath == null) {
+            throw new ConfigurationException("Cannot resolve property [" + criterion.getProperty() + "] in a " + functionName + " function call");
+        }
+        Expression<?> left = applyFunction(functionName, propertyPath);
+        Query.PropertyCriterion wrapped = criterion.getPropertyCriterion();
+        Object value = convertFunctionValue(functionName, wrapped.getValue());
+
+        if (wrapped instanceof Query.ILike) {
+            return criteriaBuilder.ilike((Expression<String>) left, (String) value);
+        } else if (wrapped instanceof Query.Like) {
+            return criteriaBuilder.like((Expression<String>) left, (String) value);
+        } else if (wrapped instanceof Query.Equals) {
+            return criteriaBuilder.equal(left, value);
+        } else if (wrapped instanceof Query.NotEquals) {
+            return criteriaBuilder.notEqual(left, value);
+        } else if (wrapped instanceof Query.GreaterThan) {
+            return criteriaBuilder.greaterThan((Expression<? extends Comparable>) left, (Comparable) value);
+        } else if (wrapped instanceof Query.GreaterThanEquals) {
+            return criteriaBuilder.greaterThanOrEqualTo((Expression<? extends Comparable>) left, (Comparable) value);
+        } else if (wrapped instanceof Query.LessThan) {
+            return criteriaBuilder.lessThan((Expression<? extends Comparable>) left, (Comparable) value);
+        } else if (wrapped instanceof Query.LessThanEquals) {
+            return criteriaBuilder.lessThanOrEqualTo((Expression<? extends Comparable>) left, (Comparable) value);
+        } else if (wrapped instanceof Query.In in) {
+            Collection<Object> values = new ArrayList<>();
+            for (Object v : in.getValues()) {
+                values.add(convertFunctionValue(functionName, v));
+            }
+            return left.in(values);
+        }
+        throw new UnsupportedOperationException("Unsupported criterion in a function call: " + wrapped.getClass().getName());
+    }
+
+    private Expression<?> applyFunction(String functionName, Expression<?> expression) {
+        return switch (functionName) {
+            case "lower" -> criteriaBuilder.lower((Expression<String>) expression);
+            case "upper" -> criteriaBuilder.upper((Expression<String>) expression);
+            case "trim" -> criteriaBuilder.trim((Expression<String>) expression);
+            case "length" -> criteriaBuilder.length((Expression<String>) expression);
+            default -> criteriaBuilder.function(functionName, Integer.class, expression);
+        };
+    }
+
+    private Object convertFunctionValue(String functionName, Object value) {
+        if (value == null) {
+            return null;
+        }
+        Class<?> targetType = switch (functionName) {
+            case "lower", "upper", "trim" -> String.class;
+            default -> Integer.class;
+        };
+        return conversionService.canConvert(value.getClass(), targetType) ? conversionService.convert(value, targetType) : value;
+    }
+
     private Predicate handlePropertyNameCriterion(JpaQueryContext fromsByProvider, Query.PropertyNameCriterion c) {
         Expression<?> propertyPath = fromsByProvider.getFullyQualifiedExpression(c.getProperty());
+        if (propertyPath == null) {
+            throw new ConfigurationException("Cannot resolve property [" + c.getProperty() + "] in a " + c.getClass().getSimpleName() + " criterion");
+        }
         if (((Object) c) instanceof Query.IsNull) {
             return criteriaBuilder.isNull(propertyPath);
         } else if (((Object) c) instanceof Query.IsNotNull) {
