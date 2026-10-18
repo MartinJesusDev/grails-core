@@ -894,6 +894,9 @@ public class JpaQueryBuilder {
         if (identity != null && identity.getName().equals(name)) {
             return identity;
         }
+        if (name.indexOf('.') > -1) {
+            return validateAssociationPath(entity, name, criterionType);
+        }
         PersistentProperty[] compositeIdentity = ((AbstractPersistentEntity) entity).getCompositeIdentity();
         if (compositeIdentity != null) {
             for (PersistentProperty property : compositeIdentity) {
@@ -908,6 +911,30 @@ public class JpaQueryBuilder {
                   criterionType.getSimpleName() + "] criterion on non-existent property: " + name);
         }
         return prop;
+    }
+
+    /**
+     * Resolves a dotted path through to-one associations, so a bulk write can filter by the id of
+     * an association (the foreign key on the entity's own table) without a join. A path that walks
+     * a to-many association, or a segment that is not a to-one association, is rejected.
+     */
+    private static PersistentProperty validateAssociationPath(PersistentEntity entity, String name, Class criterionType) {
+        String[] segments = name.split("\\.");
+        PersistentEntity current = entity;
+        for (int i = 0; i < segments.length - 1; i++) {
+            PersistentProperty property = current.getPropertyByName(segments[i]);
+            if (!(property instanceof ToOne) || ((Association) property).getAssociatedEntity() == null) {
+                throw new InvalidDataAccessResourceUsageException("Cannot use [" +
+                        criterionType.getSimpleName() + "] criterion on property path: " + name);
+            }
+            current = ((Association) property).getAssociatedEntity();
+        }
+        PersistentProperty last = current.getPropertyByName(segments[segments.length - 1]);
+        if (last == null) {
+            throw new InvalidDataAccessResourceUsageException("Cannot use [" +
+                    criterionType.getSimpleName() + "] criterion on property path: " + name);
+        }
+        return last;
     }
 
     private static interface QueryHandler {
@@ -966,11 +993,14 @@ public class JpaQueryBuilder {
             }
             else if (criterion instanceof AssociationCriteria) {
 
-                if (!allowJoins) {
-                    throw new InvalidDataAccessResourceUsageException("Joins cannot be used in a DELETE or UPDATE operation");
-                }
                 AssociationCriteria ac = (AssociationCriteria) criterion;
                 Association association = ac.getAssociation();
+                // A to-one association renders as a property path (logicalName.association.property), not a
+                // join, so a bulk statement may filter through it; a to-many association needs a join, which
+                // a DELETE or UPDATE cannot use.
+                if (!allowJoins && !(association instanceof ToOne)) {
+                    throw new InvalidDataAccessResourceUsageException("Joins cannot be used in a DELETE or UPDATE operation");
+                }
                 List<Query.Criterion> associationCriteriaList = ac.getCriteria();
                 handleAssociationCriteria(q, whereClause, logicalName, position, parameters, conversionService, allowJoins, association, new Query.Conjunction(), associationCriteriaList, hibernateCompatible);
             }
