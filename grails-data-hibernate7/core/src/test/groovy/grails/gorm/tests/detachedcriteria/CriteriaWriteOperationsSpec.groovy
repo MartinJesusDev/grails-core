@@ -41,11 +41,11 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
     }
 
     private void seed() {
-        new WriteOperationEntity(name: 'a', amount: 1, active: true, status: WriteStatus.ACTIVE).save(flush: true)
-        new WriteOperationEntity(name: 'b', amount: 2, active: true, status: WriteStatus.ACTIVE).save(flush: true)
-        new WriteOperationEntity(name: 'c', amount: 3, active: false, status: WriteStatus.INACTIVE).save(flush: true)
-        new WriteOperationEntity(name: 'd', amount: null, active: false).save(flush: true)
-        new WriteOperationEntity(name: 'e', amount: 2, active: true, status: WriteStatus.ACTIVE).save(flush: true)
+        new WriteOperationEntity(name: 'a', amount: 1, otherAmount: 0, active: true, status: WriteStatus.ACTIVE).save(flush: true)
+        new WriteOperationEntity(name: 'b', amount: 2, otherAmount: 1, active: true, status: WriteStatus.ACTIVE).save(flush: true)
+        new WriteOperationEntity(name: 'c', amount: 3, otherAmount: 2, active: false, status: WriteStatus.INACTIVE).save(flush: true)
+        new WriteOperationEntity(name: 'd', amount: null, otherAmount: null, active: false).save(flush: true)
+        new WriteOperationEntity(name: 'e', amount: 2, otherAmount: 1, active: true, status: WriteStatus.ACTIVE).save(flush: true)
     }
 
     private static DetachedCriteria<WriteOperationEntity> valuesOf(String... names) {
@@ -756,6 +756,71 @@ class CriteriaWriteOperationsSpec extends HibernateGormDatastoreSpec {
         remainingNames() == ['b', 'c', 'd', 'e']
     }
 
+    void "test a bulk write deletes the rows above the average amount"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { amount > avg(amount) }.deleteAll()
+        manager.session.clear()
+
+        then: 'the average of 1, 2, 3 and 2 is 2, so only the row above it is deleted'
+        deleted == 1
+        remainingNames() == ['a', 'b', 'd', 'e']
+    }
+
+    void "test a bulk write deletes the rows above the average of a filtered subquery"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { amount > avg(amount).of { name == 'a' } }.deleteAll()
+        manager.session.clear()
+
+        then: 'the average of the rows named a is 1'
+        deleted == 3
+        remainingNames() == ['a', 'd']
+    }
+
+    void "test a bulk write deletes the rows below every amount of a property subquery"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { amount < property(amount).of { name == 'c' } }.deleteAll()
+        manager.session.clear()
+
+        then: 'the property subquery compares against every amount of the row named c'
+        deleted == 3
+        remainingNames() == ['c', 'd']
+    }
+
+    void "test a bulk write compares a property with another property"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { amount > otherAmount }.deleteAll()
+        manager.session.clear()
+
+        then: 'the null amounts are not selected'
+        deleted == 4
+        remainingNames() == ['d']
+    }
+
+    void "test a bulk write filters with the length function"() {
+        given:
+        seed()
+
+        when:
+        Number deleted = WriteOperationEntity.where { length(name) == 1 }.deleteAll()
+        manager.session.clear()
+
+        then:
+        deleted == 5
+        remainingNames() == []
+    }
+
     void "test a bulk write does not mutate the criteria"() {
         given:
         seed()
@@ -809,6 +874,7 @@ class WriteOperationEntity implements HibernateEntity<WriteOperationEntity> {
 
     String name
     Integer amount
+    Integer otherAmount
     Boolean active
     WriteStatus status
 }

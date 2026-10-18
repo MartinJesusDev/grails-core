@@ -41,10 +41,14 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
     }
 
     private void seedEntities() {
-        new DocFormEntity(name: 'a', amount: 1).save(flush: true)
-        new DocFormEntity(name: 'b', amount: 2).save(flush: true)
-        new DocFormEntity(name: 'c', amount: 3).save(flush: true)
-        new DocFormEntity(name: 'd', amount: null).save(flush: true)
+        new DocFormEntity(name: 'a', amount: 1, otherAmount: 0, created: date(2011, 1, 1)).save(flush: true)
+        new DocFormEntity(name: 'b', amount: 2, otherAmount: 1, created: date(2012, 1, 1)).save(flush: true)
+        new DocFormEntity(name: 'c', amount: 3, otherAmount: 2, created: date(2013, 1, 1)).save(flush: true)
+        new DocFormEntity(name: 'd', amount: null, otherAmount: null, created: null).save(flush: true)
+    }
+
+    private static Date date(int year, int month, int day) {
+        new GregorianCalendar(year, month - 1, day).time
     }
 
     void "the documented where query operators execute"() {
@@ -269,6 +273,66 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
         e.message.contains('missing.name')
     }
 
+    void "the documented aggregate subqueries execute"() {
+        given:
+        seedEntities()
+
+        when:
+        def aboveAverage = DocFormEntity.where { amount > avg(amount) }.list()*.name.sort()
+        def aboveAverageOf = DocFormEntity.where { amount > avg(amount).of { name == 'a' } }.list()*.name.sort()
+        def belowPropertyOf = DocFormEntity.where { amount < property(amount).of { name == 'c' } }.list()*.name.sort()
+        def aboveAverageOfWhere = DocFormEntity.where { amount > where { amount > 0 }.avg('amount') }.list()*.name.sort()
+
+        then:
+        aboveAverage == ['c']
+        aboveAverageOf == ['b', 'c']
+        belowPropertyOf == ['a', 'b']
+        aboveAverageOfWhere == ['c']
+    }
+
+    void "the documented date function executes"() {
+        given:
+        seedEntities()
+
+        when:
+        def bornIn2011 = DocFormEntity.where { year(created) == 2011 }.list()*.name
+        def bornAfter2011 = DocFormEntity.where { year(created) > 2011 }.list()*.name.sort()
+
+        then:
+        bornIn2011 == ['a']
+        bornAfter2011 == ['b', 'c']
+    }
+
+    void "the documented string functions execute"() {
+        given:
+        seedEntities()
+
+        when:
+        def trimmed = DocFormEntity.where { trim(name) == 'a' }.list()*.name
+        def oneCharacter = DocFormEntity.where { length(name) == 1 }.list()*.name.sort()
+
+        then:
+        trimmed == ['a']
+        oneCharacter == ['a', 'b', 'c', 'd']
+    }
+
+    void "the documented property comparisons execute"() {
+        given:
+        seedEntities()
+
+        when:
+        def greater = DocFormEntity.where { amount > otherAmount }.list()*.name.sort()
+        def equal = DocFormEntity.where { amount == otherAmount }.list()*.name
+        def greaterOrEqual = DocFormEntity.where { amount >= otherAmount }.list()*.name.sort()
+        def notEqual = DocFormEntity.where { amount != otherAmount }.list()*.name.sort()
+
+        then:
+        greater == ['a', 'b', 'c']
+        equal == []
+        greaterOrEqual == ['a', 'b', 'c']
+        notEqual == ['a', 'b', 'c']
+    }
+
     void "the alias exists form keeps the comparison criterion in the subquery tree"() {
         when:
         def query = DocFormParent.where {
@@ -295,6 +359,8 @@ class DocFormEntity implements HibernateEntity<DocFormEntity> {
 
     String name
     Integer amount
+    Integer otherAmount
+    Date created
 }
 
 @Entity
