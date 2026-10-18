@@ -24,6 +24,7 @@ import grails.gorm.tests.HibernateGormDatastoreSpec
 import org.hibernate.annotations.Filter
 import org.hibernate.annotations.FilterDef
 import org.hibernate.annotations.Formula
+import org.hibernate.annotations.ParamDef
 import org.hibernate.annotations.SQLRestriction
 
 /**
@@ -33,7 +34,7 @@ import org.hibernate.annotations.SQLRestriction
 class CriteriaMappingFeaturesSpec extends HibernateGormDatastoreSpec {
 
     def setupSpec() {
-        manager.registerDomainClasses(FormulaEntity, AnnotatedFormulaEntity, RestrictedEntity, FilteredEntity)
+        manager.registerDomainClasses(FormulaEntity, AnnotatedFormulaEntity, RestrictedEntity, FilteredEntity, ParameterFilteredEntity)
     }
 
     void "a criteria queries and orders by an annotated formula property"() {
@@ -102,6 +103,22 @@ class CriteriaMappingFeaturesSpec extends HibernateGormDatastoreSpec {
         afterDisable == ['hidden', 'visible']
     }
 
+    void "a criteria honours an enabled Hibernate filter with parameters"() {
+        given:
+        new ParameterFilteredEntity(name: 'cheap', amount: 1).save(flush: true)
+        new ParameterFilteredEntity(name: 'expensive', amount: 10).save(flush: true)
+
+        when:
+        datastore.sessionFactory.currentSession.enableFilter('aboveAmount').setParameter('minAmount', 5)
+        def filtered = ParameterFilteredEntity.where {}.list()*.name
+        datastore.sessionFactory.currentSession.disableFilter('aboveAmount')
+        def afterDisable = ParameterFilteredEntity.where {}.list()*.name.sort()
+
+        then:
+        filtered == ['expensive']
+        afterDisable == ['cheap', 'expensive']
+    }
+
     void "a criteria queries and orders by a formula property"() {
         given:
         new FormulaEntity(name: 'a', amount: 1).save(flush: true)
@@ -158,4 +175,14 @@ class FilteredEntity implements HibernateEntity<FilteredEntity> {
 
     String name
     Boolean active
+}
+
+@Entity
+@FilterDef(name = 'aboveAmount', defaultCondition = 'amount >= :minAmount',
+        parameters = @ParamDef(name = 'minAmount', type = Integer))
+@Filter(name = 'aboveAmount')
+class ParameterFilteredEntity implements HibernateEntity<ParameterFilteredEntity> {
+
+    String name
+    Integer amount
 }
