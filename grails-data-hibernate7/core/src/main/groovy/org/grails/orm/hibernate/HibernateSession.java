@@ -40,7 +40,9 @@ import org.hibernate.SessionFactory;
 import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.query.MutationQuery;
 
+import org.grails.datastore.gorm.query.criteria.AbstractDetachedCriteria;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -317,6 +319,7 @@ public class HibernateSession extends AbstractAttributeStoringSession implements
     @Override
     @SuppressWarnings("PMD.DataflowAnomalyAnalysis")
     public long deleteAll(final QueryableCriteria criteria) {
+        rejectPagination(criteria);
         return getHibernateTemplate().execute((GrailsHibernateTemplate.HibernateCallback<Integer>) session -> {
             JpaQueryBuilder builder = new JpaQueryBuilder(criteria);
             builder.setConversionService(getMappingContext().getConversionService());
@@ -334,6 +337,22 @@ public class HibernateSession extends AbstractAttributeStoringSession implements
                     new PostQueryEvent(datastore, hqlQuery, Collections.singletonList(result)));
             return result;
         });
+    }
+
+    /**
+     * A bulk statement has no limit clause, so the pagination of the criteria cannot take part in it.
+     * Failing here keeps a limited batch operation from silently changing every matching row.
+     */
+    private static void rejectPagination(QueryableCriteria criteria) {
+        if (criteria instanceof AbstractDetachedCriteria<?> detachedCriteria) {
+            Integer maxResults = detachedCriteria.getDefaultMax();
+            Integer offset = detachedCriteria.getDefaultOffset();
+            if (maxResults != null || offset != null) {
+                throw new InvalidDataAccessResourceUsageException(
+                        "A batch operation cannot honour the pagination of the criteria (maxResults: " + maxResults
+                                + ", offset: " + offset + "): a bulk update or delete has no limit clause");
+            }
+        }
     }
 
     private MutationQuery createMutationQuery(Session session, JpaQueryInfo jpaQueryInfo) {
@@ -358,6 +377,7 @@ public class HibernateSession extends AbstractAttributeStoringSession implements
     @Override
     @SuppressWarnings("PMD.DataflowAnomalyAnalysis")
     public long updateAll(final QueryableCriteria criteria, final Map<String, Object> properties) {
+        rejectPagination(criteria);
         return getHibernateTemplate().execute((GrailsHibernateTemplate.HibernateCallback<Integer>) session -> {
             JpaQueryBuilder builder = new JpaQueryBuilder(criteria);
             builder.setConversionService(getMappingContext().getConversionService());
