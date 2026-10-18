@@ -86,8 +86,12 @@ public class JpaQueryBuilder {
     private boolean hibernateCompatible;
 
     public JpaQueryBuilder(QueryableCriteria criteria) {
+        this(criteria.getPersistentEntity(), materializedCriteria(criteria));
+    }
+
+    private static List<Query.Criterion> materializedCriteria(QueryableCriteria criteria) {
         criteria.applyLazyCriteria();
-        this(criteria.getPersistentEntity(), criteria.getCriteria());
+        return criteria.getCriteria();
     }
 
     public JpaQueryBuilder(PersistentEntity entity, List<Query.Criterion> criteria) {
