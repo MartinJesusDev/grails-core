@@ -316,6 +316,28 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
         oneCharacter == ['a', 'b', 'c', 'd']
     }
 
+    void "the list options of the where syntax do not change the matches"() {
+        given:
+        seedEntities()
+
+        when:
+        def page = DocFormEntity.where { amount != null }.list(max: 2, sort: 'name')
+        def session = datastore.sessionFactory.currentSession
+        manager.session.clear()
+        def criteriaRows = DocFormEntity.where {}.readOnly(true).list()
+        def criteriaReadOnly = criteriaRows.every { session.isReadOnly(it) }
+        manager.session.clear()
+        def closureRows = DocFormEntity.where {}.list { readOnly(true) }
+        def closureReadOnly = closureRows.every { session.isReadOnly(it) }
+
+        then:
+        page*.name == ['a', 'b']
+        criteriaRows*.name.sort() == ['a', 'b', 'c', 'd']
+        criteriaReadOnly
+        closureRows*.name.sort() == ['a', 'b', 'c', 'd']
+        closureReadOnly
+    }
+
     void "the documented property comparisons execute"() {
         given:
         seedEntities()
