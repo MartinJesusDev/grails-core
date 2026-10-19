@@ -557,8 +557,7 @@ class DetachedCriteria<T> extends AbstractDetachedCriteria<T> implements GormOpe
      */
     Number deleteAll() {
         GormRegistry.instance.findStaticApi(targetClass, connectionName).withDatastoreSession { Session session ->
-            applyLazyCriteria()
-            session.deleteAll(this)
+            session.deleteAll(materializeLazyCriteria())
         }
     }
 
@@ -569,8 +568,7 @@ class DetachedCriteria<T> extends AbstractDetachedCriteria<T> implements GormOpe
      */
     Number updateAll(Map properties) {
         GormRegistry.instance.findStaticApi(targetClass, connectionName).withDatastoreSession { Session session ->
-            applyLazyCriteria()
-            session.updateAll(this, properties)
+            session.updateAll(materializeLazyCriteria(), properties)
         }
     }
 
@@ -731,6 +729,23 @@ class DetachedCriteria<T> extends AbstractDetachedCriteria<T> implements GormOpe
         }
     }
 
+    /**
+     * Returns this criteria with its deferred query applied, without mutating it: the original keeps the
+     * deferred query, so a criteria shared between threads materializes a copy each time and no deferred
+     * definition is applied twice.
+     */
+    @Override
+    DetachedCriteria<T> materializeLazyCriteria() {
+        Closure pending = lazyQuery
+        if (pending == null) {
+            return this
+        }
+        DetachedCriteria<T> materialized = (DetachedCriteria<T>) clone()
+        materialized.lazyQuery = null
+        materialized.with(pending)
+        return materialized
+    }
+
     protected QueryableCriteria buildQueryableCriteria(Closure queryClosure) {
         return new DetachedCriteria(targetClass).build((Closure) queryClosure)
     }
@@ -739,7 +754,7 @@ class DetachedCriteria<T> extends AbstractDetachedCriteria<T> implements GormOpe
 
         GormStaticApi staticApi = GormRegistry.instance.findStaticApi(targetClass, connectionName)
         staticApi.withDatastoreSession { Session session ->
-            applyLazyCriteria()
+            AbstractDetachedCriteria<T> effective = materializeLazyCriteria()
             Query query
             if (alias && (session instanceof QueryAliasAwareSession)) {
                 query = session.createQuery(targetClass, alias)
@@ -754,7 +769,7 @@ class DetachedCriteria<T> extends AbstractDetachedCriteria<T> implements GormOpe
             if (defaultOffset != null) {
                 query.offset(defaultOffset)
             }
-            DynamicFinder.applyDetachedCriteria(query, this)
+            DynamicFinder.applyDetachedCriteria(query, effective)
 
             if (query instanceof QueryArgumentsAware) {
                 ((QueryArgumentsAware) query).arguments = args
