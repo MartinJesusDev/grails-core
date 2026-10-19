@@ -18,13 +18,13 @@
  */
 package org.grails.orm.hibernate.cfg.domainbinding.binder;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import jakarta.annotation.Nonnull;
 
 import org.hibernate.boot.spi.InFlightMetadataCollector;
 import org.hibernate.boot.spi.MetadataBuildingContext;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.hibernate.engine.spi.FilterDefinition;
 import org.hibernate.mapping.RootClass;
 import org.slf4j.Logger;
@@ -64,7 +64,6 @@ public class RootPersistentClassCommonValuesBinder {
         this.mappings = mappings;
     }
 
-
     /**
      * The SQL restriction an entity declares with the Hibernate annotation, so every query of the
      * entity carries it, like the annotation binder of Hibernate does.
@@ -94,8 +93,8 @@ public class RootPersistentClassCommonValuesBinder {
         for (org.hibernate.annotations.ParamDef parameter : parameters) {
             var type = registry.getRegisteredType(parameter.type());
             if (type == null) {
-                throw new IllegalArgumentException("Unknown type [" + parameter.type() + "] of the filter parameter ["
-                        + parameter.name() + "] of [" + javaClass.getName() + "]");
+                throw new IllegalArgumentException("Unknown type [" + parameter.type() + "] of the filter parameter [" +
+                        parameter.name() + "] of [" + javaClass.getName() + "]");
             }
             parameterTypes.put(parameter.name(), type);
         }

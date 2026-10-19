@@ -40,13 +40,13 @@ import org.hibernate.SessionFactory;
 import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.query.MutationQuery;
 
-import org.grails.datastore.gorm.query.criteria.AbstractDetachedCriteria;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.core.convert.ConversionService;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import org.grails.datastore.gorm.query.criteria.AbstractDetachedCriteria;
 import org.grails.datastore.gorm.timestamp.DefaultTimestampProvider;
 import org.grails.datastore.mapping.core.AbstractAttributeStoringSession;
 import org.grails.datastore.mapping.core.Datastore;
@@ -349,8 +349,8 @@ public class HibernateSession extends AbstractAttributeStoringSession implements
             Integer offset = detachedCriteria.getDefaultOffset();
             if (maxResults != null || offset != null) {
                 throw new InvalidDataAccessResourceUsageException(
-                        "A batch operation cannot honour the pagination of the criteria (maxResults: " + maxResults
-                                + ", offset: " + offset + "): a bulk update or delete has no limit clause");
+                        "A batch operation cannot honour the pagination of the criteria (maxResults: " + maxResults +
+                                ", offset: " + offset + "): a bulk update or delete has no limit clause");
             }
         }
     }

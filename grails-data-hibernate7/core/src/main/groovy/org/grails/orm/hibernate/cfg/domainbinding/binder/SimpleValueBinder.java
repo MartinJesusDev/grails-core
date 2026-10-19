@@ -77,7 +77,6 @@ public class SimpleValueBinder {
         return basicValue;
     }
 
-
     /**
      * The formula a property declares with the Hibernate annotation, so the annotation and the
      * mapping DSL both configure a derived property.
