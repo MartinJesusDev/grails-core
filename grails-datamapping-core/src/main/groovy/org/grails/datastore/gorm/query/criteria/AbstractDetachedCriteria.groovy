@@ -885,6 +885,7 @@ abstract class AbstractDetachedCriteria<T> implements Criteria, Cloneable {
         criteria.@joinTypes = new HashMap<>(this.joinTypes)
         criteria.@junctions = new ArrayList(this.junctions)
         criteria.@connectionName = this.connectionName
+        criteria.@alias = this.alias
         criteria.@lazyQuery = this.lazyQuery
         criteria.@associationCriteriaMap = new LinkedHashMap<>(this.associationCriteriaMap)
         return criteria
