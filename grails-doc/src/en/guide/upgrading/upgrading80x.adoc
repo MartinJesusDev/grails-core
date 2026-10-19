@@ -1453,7 +1453,7 @@ class SportsCar extends Car {
 
 The Hibernate 7 implementation translates the GORM criteria API to the JPA Criteria API, which is stricter than the Hibernate 5 implementation in a few places and honours the annotations the binder reads.
 
-*Mapping annotations.* The binder maps `@org.hibernate.annotations.Formula` on a property, and `@org.hibernate.annotations.SQLRestriction`, `@FilterDef` and `@Filter` on an entity, the same way the `mapping { }` DSL does. A filter definition that declares parameters registers them, so the session can enable the filter and set its parameters.
+*Mapping annotations.* The binder maps `@org.hibernate.annotations.Formula` on a property, and `@org.hibernate.annotations.SQLRestriction`, `@FilterDef` and `@Filter` on an entity, the same way the `mapping { }` DSL does. A filter definition that declares parameters registers them, so the session can enable the filter and set its parameters. A `@SQLRestriction` declared on a subclass fails with a clear message: Hibernate maps the restriction on the root entity of the hierarchy, and the binder refuses to drop it silently.
 
 *Comparing a property with an association.* A comparison between a basic property and an association (for example `id == team.club`) is rejected, because the right-hand side is an entity and not a value. Hibernate 5 resolved the association through its identifier; migrate to comparing the identifiers:
 
