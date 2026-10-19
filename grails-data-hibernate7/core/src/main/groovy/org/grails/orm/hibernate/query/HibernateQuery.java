@@ -634,6 +634,10 @@ public class HibernateQuery extends Query implements QueryArgumentsAware {
         this.flushMode = GrailsQueryFlushMode.mapToHibernateQueryFlushMode(flushMode);
     }
 
+    public QueryFlushMode getQueryFlushMode() {
+        return flushMode;
+    }
+
     public void setReadOnly(Boolean readOnly) {
         this.readOnly = readOnly;
     }
@@ -664,6 +668,9 @@ public class HibernateQuery extends Query implements QueryArgumentsAware {
         }
         if (arguments.containsKey(HibernateQueryArgument.TIMEOUT.value())) {
             setTimeout(toInteger(arguments.get(HibernateQueryArgument.TIMEOUT.value())));
+        }
+        if (arguments.containsKey(HibernateQueryArgument.FLUSH_MODE.value())) {
+            this.flushMode = GrailsQueryFlushMode.mapToHibernateQueryFlushMode(arguments.get(HibernateQueryArgument.FLUSH_MODE.value()));
         }
     }
 

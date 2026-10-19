@@ -21,6 +21,10 @@ package grails.gorm.tests.detachedcriteria
 import grails.gorm.annotation.Entity
 import grails.gorm.hibernate.HibernateEntity
 import grails.gorm.tests.HibernateGormDatastoreSpec
+import org.grails.orm.hibernate.HibernateSession
+import org.grails.orm.hibernate.cfg.domainbinding.hibernate.GrailsHibernatePersistentEntity
+import org.grails.orm.hibernate.query.HibernateQuery
+import org.hibernate.query.QueryFlushMode
 import org.grails.datastore.mapping.core.exceptions.ConfigurationException
 import org.grails.datastore.mapping.query.Query
 import org.grails.datastore.mapping.query.api.AssociationCriteria
@@ -314,6 +318,18 @@ class WhereQueryDocumentedFormsSpec extends HibernateGormDatastoreSpec {
         then:
         trimmed == ['a']
         oneCharacter == ['a', 'b', 'c', 'd']
+    }
+
+    void "the flush mode of the arguments map is applied"() {
+        given:
+        def entity = (GrailsHibernatePersistentEntity) datastore.mappingContext.getPersistentEntity(DocFormEntity.name)
+
+        when:
+        def query = new HibernateQuery((HibernateSession) manager.session, entity)
+        query.setArguments([flushMode: 'MANUAL'])
+
+        then: 'the manual mode maps to a query that does not flush the session'
+        query.queryFlushMode == QueryFlushMode.NO_FLUSH
     }
 
     void "the list options of the where syntax do not change the matches"() {
