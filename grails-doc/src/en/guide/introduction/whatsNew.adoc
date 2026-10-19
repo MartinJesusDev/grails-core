@@ -416,6 +416,28 @@ GORM for Hibernate 7 now starts tracking changes to an entity when it is persist
 
 As part of this change, persistence event listeners on Hibernate 7 receive a `PersistEvent` (`eventType` `Persist`) for every explicit or flush-time cascaded persist and a `MergeEvent` (`eventType` `Merge`) for every merge. Neither event can be cancelled. Hibernate 5 continues to publish `SaveOrUpdateEvent` when an entity is saved, and publishes no event for a merge. A listener that switches over `event.eventType` with a default branch that throws should handle the new values. See the Events and Auto Timestamping section of the GORM for link:{hibernate7Guide}index.html#eventsAutoTimestamping[Hibernate 7] guide.
 
+==== GORM for Hibernate 7 Criteria and Query Support
+
+The Hibernate 7 GORM implementation supports the criteria and query features the manual documents and the
+Hibernate 5 implementation provided:
+
+* Where-query function calls on a property (`upper`, `lower`, `trim`, `length` and `year`), in a criteria and in a
+  bulk write.
+* Aggregate subqueries: `age > avg(age)`, `avg(age).of { ... }`, `property(age).of { ... }` and
+  `where { ... }.avg('age')`.
+* Comparing a property with a projection subquery for `gt`, `ge`, `lt` and `le`.
+* The alias variables form with cross references, including a root alias referenced from a subquery.
+* `exists` and `notExists`, association aliases and the `{alias}` placeholder in a bulk `updateAll`/`deleteAll`,
+  and subqueries that select the rows to update or delete.
+* The read only mode (`readOnly(true)` and `cache(true)`) and the Hibernate settings of a query arguments map
+  (`cache`, `readOnly`, `fetchSize`, `timeout` and `flushMode`) for a criteria.
+* The Hibernate annotations `@Formula`, `@SQLRestriction` and `@FilterDef`/`@Filter`, which the binder maps like the
+  `mapping { }` DSL does.
+
+A batch operation that asks for pagination (`max`/`offset`) now fails with a clear message instead of touching
+every matching row, and a `@SQLRestriction` declared on a subclass fails at mapping: see the Upgrade Notes for the
+action to take.
+
 ==== Default Security Response Headers
 
 Servlet web applications now send a baseline set of browser hardening headers on every response:
