@@ -59,4 +59,44 @@ class SubqueryAliasSpec extends Specification {
         then:
         t != null
     }
+
+    @Rollback
+    void "Test a derived criteria keeps the root alias"() {
+        given:
+        Club c = new Club(name: "Manchester United").save()
+        new Team(name: "First Team", club: c).save(flush: true)
+
+        when:
+        Team t = Team.where {
+            def t = Team
+            name == "First Team"
+            exists(Club.where {
+                id == t.club.id
+            }.property('name'))
+
+        }.sort('name').find()
+
+        then:
+        t != null
+    }
+
+    @Rollback
+    void "Test a lazy subquery with a root alias"() {
+        given:
+        Club c = new Club(name: "Manchester United").save()
+        new Team(name: "First Team", club: c).save(flush: true)
+
+        when:
+        Team t = Team.whereLazy {
+            def t = Team
+            name == "First Team"
+            exists(Club.where {
+                id == t.club.id
+            }.property('name'))
+
+        }.find()
+
+        then:
+        t != null
+    }
 }
