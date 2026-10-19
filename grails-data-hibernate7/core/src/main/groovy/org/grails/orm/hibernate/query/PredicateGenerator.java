@@ -235,7 +235,7 @@ public class PredicateGenerator {
     private Predicate handleSubqueryCriterion(AbstractQuery<?> criteriaQuery, From<?, ?> root, JpaQueryContext fromsByProvider, GrailsHibernatePersistentEntity entity, Query.SubqueryCriterion c) {
         Expression<?> propertyPath = fromsByProvider.getFullyQualifiedExpression(c.getProperty());
         QueryableCriteria<?> qc = c.getValue();
-        materializeLazyCriteria(qc);
+        qc = materializeLazyCriteria(qc);
 
         // If it's a comparison criterion, we expect the subquery to return the same type as the property
         Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
@@ -414,7 +414,7 @@ public class PredicateGenerator {
         } else if (pc instanceof Query.In) {
             Object value = pc.getValue();
             if (value instanceof QueryableCriteria qc) {
-                materializeLazyCriteria(qc);
+                qc = materializeLazyCriteria(qc);
                 Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
 
                 Query.ProjectionList projectionList = new Query.ProjectionList();
@@ -578,7 +578,7 @@ public class PredicateGenerator {
     @SuppressWarnings("unchecked")
     private Predicate handleComparisonWithSubquery(AbstractQuery<?> criteriaQuery, Query.PropertyCriterion pc, Expression<?> propertyPath, JpaQueryContext fromsByProvider, Comparison comparison) {
         QueryableCriteria<?> qc = (QueryableCriteria<?>) pc.getValue();
-        materializeLazyCriteria(qc);
+        qc = materializeLazyCriteria(qc);
         Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
         Subquery<?> subquery = criteriaQuery.subquery(expectedType);
 
@@ -700,7 +700,7 @@ public class PredicateGenerator {
     @SuppressWarnings("unchecked")
     private Predicate handleEquals(AbstractQuery<?> criteriaQuery, Query.PropertyCriterion pc, Expression<?> propertyPath, JpaQueryContext fromsByProvider, GrailsHibernatePersistentEntity entity) {
         if (pc.getValue() instanceof QueryableCriteria qc) {
-            materializeLazyCriteria(qc);
+            qc = materializeLazyCriteria(qc);
             Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
             Subquery<?> subquery = criteriaQuery.subquery(expectedType);
 
@@ -756,7 +756,7 @@ public class PredicateGenerator {
             return criteriaBuilder.isNotNull(propertyPath);
         }
         if (value instanceof QueryableCriteria qc) {
-            materializeLazyCriteria(qc);
+            qc = materializeLazyCriteria(qc);
             Class<?> expectedType = propertyPath != null ? propertyPath.getJavaType() : qc.getPersistentEntity().getJavaClass();
             Subquery<?> subquery = criteriaQuery.subquery(expectedType);
 
@@ -792,7 +792,7 @@ public class PredicateGenerator {
         JpaQueryContext fromsByProvider,
         Query.Exists exists) {
         QueryableCriteria subqueryCriteria = exists.getSubquery();
-        materializeLazyCriteria(subqueryCriteria);
+        subqueryCriteria = materializeLazyCriteria(subqueryCriteria);
         GrailsHibernatePersistentEntity subqueryEntity = (GrailsHibernatePersistentEntity) subqueryCriteria.getPersistentEntity();
         Subquery<?> subquery = criteriaQuery.subquery(subqueryEntity.getJavaClass());
         var creator = new JpaCriteriaQueryCreator(new Query.ProjectionList(), criteriaBuilder, subqueryEntity, (DetachedCriteria) subqueryCriteria, conversionService);
@@ -807,10 +807,8 @@ public class PredicateGenerator {
      * {@code DetachedCriteria}, but a criteria reached only through a subquery criterion never is,
      * so its restrictions would be silently dropped.
      */
-    private static void materializeLazyCriteria(QueryableCriteria<?> criteria) {
-        if (criteria instanceof DetachedCriteria<?> detachedCriteria) {
-            detachedCriteria.applyLazyCriteria();
-        }
+    private static QueryableCriteria<?> materializeLazyCriteria(QueryableCriteria<?> criteria) {
+        return criteria.materializeLazyCriteria();
     }
 
     private Object convertValue(GrailsHibernatePersistentEntity entity, String propertyName, Object value, Expression<?> propertyPath) {

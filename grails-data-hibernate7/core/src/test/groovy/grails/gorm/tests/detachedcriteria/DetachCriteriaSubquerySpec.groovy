@@ -154,6 +154,23 @@ class DetachCriteriaSubquerySpec extends HibernateGormDatastoreSpec {
         result*.name == ['B']
     }
 
+    void "test a lazy criteria is materialized without mutating the original"() {
+        setup:
+        new Organisation(name: 'A').save(flush: true)
+        new Organisation(name: 'B').save(flush: true)
+
+        when:
+        DetachedCriteria<Organisation> criteria = Organisation.whereLazy { eq('name', 'A') }
+        DetachedCriteria<Organisation> materialized = criteria.materializeLazyCriteria()
+        List<Organisation> fromOriginal = criteria.list()
+        List<Organisation> fromCopy = materialized.list()
+
+        then: 'the copy is a different criteria and both read the restriction'
+        !materialized.is(criteria)
+        fromOriginal*.name == ['A']
+        fromCopy*.name == ['A']
+    }
+
     void "test a lazy detached criteria used as the root query still materializes"() {
         setup:
         new Organisation(name: 'A').save(flush: true)
