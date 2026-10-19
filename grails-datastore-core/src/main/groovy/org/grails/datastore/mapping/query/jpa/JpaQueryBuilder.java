@@ -90,8 +90,7 @@ public class JpaQueryBuilder {
     }
 
     private static List<Query.Criterion> materializedCriteria(QueryableCriteria criteria) {
-        criteria.applyLazyCriteria();
-        return criteria.getCriteria();
+        return criteria.materializeLazyCriteria().getCriteria();
     }
 
     public JpaQueryBuilder(PersistentEntity entity, List<Query.Criterion> criteria) {
@@ -876,7 +875,7 @@ public class JpaQueryBuilder {
      * for the ones declared inside it while its criteria are rendered.
      */
     protected int buildSubQuery(StringBuilder q, StringBuilder whereClause, int position, List parameters, ConversionService conversionService, boolean allowJoins, boolean hibernateCompatible, QueryableCriteria subquery, String outerLogicalName, PersistentEntity outerEntity) {
-        subquery.applyLazyCriteria();
+        subquery = subquery.materializeLazyCriteria();
         PersistentEntity associatedEntity = subquery.getPersistentEntity();
         String associatedEntityName = associatedEntity.getName();
         String associatedEntityLogicalName = associatedEntity.getDecapitalizedName() + position;
