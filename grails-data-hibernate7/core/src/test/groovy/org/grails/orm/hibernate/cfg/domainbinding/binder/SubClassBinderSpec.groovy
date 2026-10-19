@@ -56,6 +56,7 @@ class SubClassBinderSpec extends HibernateGormDatastoreSpec {
         given:
         def subEntity = Mock(HibernatePersistentEntity)
         subEntity.getName() >> "Child"
+        subEntity.getJavaClass() >> ChildEntity
         subEntity.getChildEntities(ConnectionSource.DEFAULT) >> []
         def rootClass = new RootClass(metadataBuildingContext)
         rootClass.setEntityName("Parent")
@@ -73,12 +74,32 @@ class SubClassBinderSpec extends HibernateGormDatastoreSpec {
         results == [subClass]
     }
 
+    def "test a SQL restriction on a subclass is rejected"() {
+        given:
+        def subEntity = Mock(HibernatePersistentEntity)
+        subEntity.getName() >> "Child"
+        subEntity.getJavaClass() >> RestrictedChildEntity
+        subEntity.getChildEntities(ConnectionSource.DEFAULT) >> []
+        def rootClass = new RootClass(metadataBuildingContext)
+        rootClass.setEntityName("Parent")
+        rootClass.setJpaEntityName("Parent")
+
+        when:
+        binder.bindSubClass(subEntity, rootClass)
+
+        then:
+        IllegalArgumentException e = thrown()
+        e.message.contains('cannot be applied to a subclass')
+    }
+
     def "test bindSubClass with children"() {
         given:
         def subEntity = Mock(HibernatePersistentEntity)
         def grandChildEntity = Mock(HibernatePersistentEntity)
         subEntity.getName() >> "Child"
+        subEntity.getJavaClass() >> ChildEntity
         grandChildEntity.getName() >> "GrandChild"
+        grandChildEntity.getJavaClass() >> GrandChildEntity
         subEntity.getChildEntities(ConnectionSource.DEFAULT) >> [grandChildEntity]
         grandChildEntity.getChildEntities(ConnectionSource.DEFAULT) >> []
 
@@ -102,4 +123,17 @@ class SubClassBinderSpec extends HibernateGormDatastoreSpec {
         2 * multiTenantFilterBinder.bind(_, _)
         results == [subClass, grandChildSubClass]
     }
+}
+
+@grails.gorm.annotation.Entity
+class ChildEntity {
+}
+
+@grails.gorm.annotation.Entity
+class GrandChildEntity extends ChildEntity {
+}
+
+@grails.gorm.annotation.Entity
+@org.hibernate.annotations.SQLRestriction('active = true')
+class RestrictedChildEntity extends ChildEntity {
 }
