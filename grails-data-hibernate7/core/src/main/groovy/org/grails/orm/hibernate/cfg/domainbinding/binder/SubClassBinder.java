@@ -48,7 +48,6 @@ public class SubClassBinder {
         this.dataSourceName = dataSourceName;
     }
 
-
     /**
      * A SQL restriction declared on a subclass cannot be applied: Hibernate 7 maps it on the root class of
      * the hierarchy and Subclass has no setter, so the restriction would be dropped silently. Applying it to
@@ -58,8 +57,8 @@ public class SubClassBinder {
         Class<?> javaClass = sub.getJavaClass();
         org.hibernate.annotations.SQLRestriction restriction = javaClass.getAnnotation(org.hibernate.annotations.SQLRestriction.class);
         if (restriction != null) {
-            throw new IllegalArgumentException("The SQL restriction of [" + javaClass.getName()
-                    + "] cannot be applied to a subclass: declare it on the root entity of the hierarchy");
+            throw new IllegalArgumentException("The SQL restriction of [" + javaClass.getName() +
+                    "] cannot be applied to a subclass: declare it on the root entity of the hierarchy");
         }
     }
 
